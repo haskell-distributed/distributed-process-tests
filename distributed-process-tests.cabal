@@ -34,14 +34,86 @@ library
                      rematch >= 0.1.2.1,
                      test-framework >= 0.6 && < 0.9,
                      test-framework-hunit >= 0.2.0 && < 0.4
-  hs-source-dirs:   src
-  ghc-options:      -Wall -fno-warn-unused-do-bind
-  extensions:       CPP,
-                    ExistentialQuantification,
-                    FlexibleInstances,
-                    DeriveDataTypeable,
-                    DeriveGeneric,
-                    GeneralizedNewtypeDeriving,
-                    OverlappingInstances,
-                    RankNTypes,
-                    ScopedTypeVariables
+  hs-source-dirs:    src
+  ghc-options:       -Wall -fno-warn-unused-do-bind
+  extensions:        CPP,
+                     ExistentialQuantification,
+                     FlexibleInstances,
+                     DeriveDataTypeable,
+                     DeriveGeneric,
+                     GeneralizedNewtypeDeriving,
+                     OverlappingInstances,
+                     RankNTypes,
+                     RecordWildCards,
+                     ScopedTypeVariables
+
+Test-Suite TestCH
+  Type:              exitcode-stdio-1.0
+  Main-Is:           runTCP.hs
+  CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.CH
+  Build-Depends:     base >= 4.4 && < 5,
+                     distributed-process-tests,
+                     network >= 2.3 && < 2.5,
+                     network-transport >= 0.3 && < 0.4,
+                     network-transport-tcp >= 0.3 && < 0.4,
+                     test-framework >= 0.6 && < 0.9
+  Extensions:        CPP
+  ghc-options:       -Wall -threaded -debug -eventlog -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
+  HS-Source-Dirs:    tests
+
+Test-Suite TestClosure
+  Type:              exitcode-stdio-1.0
+  Main-Is:           runTCP.hs
+  CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Closure
+  Build-Depends:     base >= 4.4 && < 5,
+                     distributed-process-tests,
+                     network >= 2.3 && < 2.5,
+                     network-transport >= 0.3 && < 0.4,
+                     network-transport-tcp >= 0.3 && < 0.4,
+                     test-framework >= 0.6 && < 0.9
+  Extensions:        CPP
+  ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
+  HS-Source-Dirs:    tests
+
+Test-Suite TestStats
+  Type:              exitcode-stdio-1.0
+  Main-Is:           runTCP.hs
+  CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Stats
+  Build-Depends:     base >= 4.4 && < 5,
+                     distributed-process-tests,
+                     network >= 2.3 && < 2.5,
+                     network-transport >= 0.3 && < 0.4,
+                     network-transport-tcp >= 0.3 && < 0.4,
+                     test-framework >= 0.6 && < 0.9
+  Extensions:        CPP
+  ghc-options:       -Wall -debug -eventlog -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
+  HS-Source-Dirs:    tests
+
+
+Test-Suite TestMx
+  Type:              exitcode-stdio-1.0
+  Main-Is:           runTCP.hs
+  CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Mx
+  Build-Depends:     base >= 4.4 && < 5,
+                     distributed-process-tests,
+                     network >= 2.3 && < 2.5,
+                     network-transport >= 0.3 && < 0.4,
+                     network-transport-tcp >= 0.3 && < 0.4,
+                     test-framework >= 0.6 && < 0.9
+  Extensions:        CPP
+  ghc-options:       -Wall -debug -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
+  HS-Source-Dirs:    tests
+
+Test-Suite TestTracing
+  Type:              exitcode-stdio-1.0
+  Main-Is:           runTCP.hs
+  CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Tracing
+  Build-Depends:     base >= 4.4 && < 5,
+                     distributed-process-tests,
+                     network >= 2.3 && < 2.5,
+                     network-transport >= 0.3 && < 0.4,
+                     network-transport-tcp >= 0.3 && < 0.4,
+                     test-framework >= 0.6 && < 0.9
+  Extensions:        CPP
+  ghc-options:       -Wall -debug -eventlog -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
+  HS-Source-Dirs:    tests
