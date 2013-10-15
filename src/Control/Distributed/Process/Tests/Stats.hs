@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# OPTIONS_GHC -fno-warn-orphans      #-}
-module Main where
+module Control.Distributed.Process.Tests.Stats where
 
 import Control.Concurrent.MVar
   ( MVar
@@ -26,7 +26,7 @@ import Test.Framework
   )
 import Test.HUnit (Assertion)
 import Test.Framework.Providers.HUnit (testCase)
-import TestUtils
+import Control.Distributed.Process.Tests.Internal.Utils
 
 testLocalDeadProcessInfo :: TestResult (Maybe ProcessInfo) -> Process ()
 testLocalDeadProcessInfo result = do
@@ -130,4 +130,3 @@ statsTests _ = do
 
 main :: IO ()
 main = testMain $ statsTests
-

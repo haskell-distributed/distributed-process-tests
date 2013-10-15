@@ -1,5 +1,7 @@
 {-# LANGUAGE TemplateHaskell, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -Wall #-}
+module Control.Distributed.Process.Tests.Receive where
+
 import Control.Distributed.Process
 import Control.Distributed.Process.Closure
 import Control.Distributed.Process.Node
@@ -13,7 +15,6 @@ import Network.Transport.TCP
 
 import Control.Monad
 import Text.Printf
-import Data.DeriveTH
 import Data.Binary
 import Data.Typeable
 

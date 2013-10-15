@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Main where
+module Control.Distributed.Process.Tests.Closure where
 
 import Data.ByteString.Lazy (empty)
 import Data.Typeable (Typeable)

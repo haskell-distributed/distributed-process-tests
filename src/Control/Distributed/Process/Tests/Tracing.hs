@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# OPTIONS_GHC -fno-warn-orphans      #-}
-module Main where
+module Control.Distributed.Process.Tests.Tracing where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.MVar
@@ -30,7 +30,7 @@ import Test.Framework
   , testGroup
   )
 import Test.Framework.Providers.HUnit (testCase)
-import TestUtils
+import Control.Distributed.Process.Tests.Internal.Utils
 
 testSpawnTracing :: TestResult Bool -> Process ()
 testSpawnTracing result = do
@@ -332,4 +332,3 @@ timerTests _ = do
 
 main :: IO ()
 main = testMain $ timerTests
-

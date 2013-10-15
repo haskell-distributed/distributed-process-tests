@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Main where
+module Control.Distributed.Process.Tests.Mx where
 
 import Control.Concurrent (threadDelay)
 import Control.Distributed.Process
@@ -39,7 +39,7 @@ import Test.Framework
   , testGroup
   )
 import Test.Framework.Providers.HUnit (testCase)
-import TestUtils
+import Control.Distributed.Process.Tests.Internal.Utils
 
 data Publish = Publish
   deriving (Typeable, Generic, Eq)
@@ -210,4 +210,3 @@ main :: IO ()
 main = do
   testMain $ statsTests
   threadDelay 100000
-

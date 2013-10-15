@@ -1,4 +1,4 @@
-module Main where
+module Control.Distributed.Process.Tests.CH where
 
 #if ! MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch)
@@ -903,7 +903,7 @@ testMatchMessageWithUnwrap :: NT.Transport -> Assertion
 testMatchMessageWithUnwrap transport = do
   echoAddr <- newEmptyMVar
   clientDone <- newEmptyMVar
-  
+
     -- echo server
   forkIO $ do
     localNode <- newLocalNode transport initRemoteTable

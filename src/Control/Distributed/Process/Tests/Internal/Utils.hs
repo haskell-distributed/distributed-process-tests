@@ -1,5 +1,5 @@
 -- | General testing support. Just @import TestUtils@ in your test module.
-module TestUtils where
+module Control.Distributed.Process.Tests.Internal.Utils where
 
 #if ! MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch)
@@ -72,4 +72,3 @@ assertComplete msg mv a = do
 
 stash :: TestResult a -> a -> Process ()
 stash mvar x = liftIO $ putMVar mvar x
-
