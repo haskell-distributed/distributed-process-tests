@@ -12,13 +12,14 @@ build-type:    Simple
 cabal-version: >=1.8
 
 library
-  exposed-modules:  Control.Distributed.Process.Tests.CH
-                    Control.Distributed.Process.Tests.Closure
-                    Control.Distributed.Process.Tests.Mx
-                    Control.Distributed.Process.Tests.Receive
-                    Control.Distributed.Process.Tests.Stats
-                    Control.Distributed.Process.Tests.Tracing
-                    Control.Distributed.Process.Tests.Internal.Utils
+  exposed-modules:   Network.Transport.Test
+                     Control.Distributed.Process.Tests.CH
+                     Control.Distributed.Process.Tests.Closure
+                     Control.Distributed.Process.Tests.Mx
+                     Control.Distributed.Process.Tests.Receive
+                     Control.Distributed.Process.Tests.Stats
+                     Control.Distributed.Process.Tests.Tracing
+                     Control.Distributed.Process.Tests.Internal.Utils
   Build-Depends:     base >= 4.4 && < 5,
                      ansi-terminal >= 0.5 && < 0.6,
                      binary >= 0.5 && < 0.8,

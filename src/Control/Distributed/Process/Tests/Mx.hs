@@ -1,5 +1,8 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Control.Distributed.Process.Tests.Mx where
+module Control.Distributed.Process.Tests.Mx (tests) where
+
+import Control.Distributed.Process.Tests.Internal.Utils
+import Network.Transport.Test (TestTransport(..))
 
 import Control.Concurrent (threadDelay)
 import Control.Distributed.Process
@@ -21,15 +24,11 @@ import Control.Distributed.Process.Management
   , mxPurgeTable
   , mxDropTable
   )
-import Control.Distributed.Process.Node
-  ( LocalNode
-  )
 import Data.Binary
 import Data.List (find)
 import Data.Maybe (isJust)
 import Data.Typeable
 import GHC.Generics
-import qualified Network.Transport as NT
 #if ! MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch, log)
 #endif
@@ -39,7 +38,6 @@ import Test.Framework
   , testGroup
   )
 import Test.Framework.Providers.HUnit (testCase)
-import Control.Distributed.Process.Tests.Internal.Utils
 
 data Publish = Publish
   deriving (Typeable, Generic, Eq)
@@ -170,8 +168,9 @@ testAgentTableDelete val result =
     get3 <- mxGet tId tKey
     stash result (get1, get2, get3)
 
-tests :: LocalNode -> IO [Test]
-tests node1 = do
+tests :: TestTransport -> IO [Test]
+tests _ = do
+  node1 <- mkNode "10001"
   return [
     testGroup "Mx Agents" [
         testCase "Event Handling"
@@ -200,13 +199,7 @@ tests node1 = do
             (delayedAssertion
              "expected (Just 15, Nothing, Just 15): invalid table entry found!"
              node1 (Just 15, Nothing, Just 15) (testAgentTableDelete 15))
+        -- Wait for other tests to finish.
+      , testCase "Wait" $
+            threadDelay 100000
       ]]
-
-statsTests :: NT.Transport -> IO [Test]
-statsTests _ = do
-  mkNode "8080" >>= tests >>= return
-
-main :: IO ()
-main = do
-  testMain $ statsTests
-  threadDelay 100000

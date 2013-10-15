@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# OPTIONS_GHC -fno-warn-orphans      #-}
-module Control.Distributed.Process.Tests.Stats where
+module Control.Distributed.Process.Tests.Stats (tests) where
+
+import Control.Distributed.Process.Tests.Internal.Utils
+import Network.Transport.Test (TestTransport(..))
 
 import Control.Concurrent.MVar
   ( MVar
@@ -12,9 +15,8 @@ import Control.Distributed.Process
 import Control.Distributed.Process.Node
   ( forkProcess
   , LocalNode)
-import Data.Binary()
-import Data.Typeable()
-import qualified Network.Transport as NT
+import Data.Binary ()
+import Data.Typeable ()
 
 #if ! MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch)
@@ -26,7 +28,6 @@ import Test.Framework
   )
 import Test.HUnit (Assertion)
 import Test.Framework.Providers.HUnit (testCase)
-import Control.Distributed.Process.Tests.Internal.Utils
 
 testLocalDeadProcessInfo :: TestResult (Maybe ProcessInfo) -> Process ()
 testLocalDeadProcessInfo result = do
@@ -108,8 +109,9 @@ testRemoteLiveProcessInfo node1 = do
       a <- delayedAssertion "getProcessInfo remotePid failed" n True
       return a
 
-tests :: LocalNode -> IO [Test]
-tests node1 = do
+tests :: TestTransport -> IO [Test]
+tests _ = do
+  node1 <- mkNode "10001"
   return [
     testGroup "Process Info" [
         testCase "testLocalDeadProcessInfo"
@@ -123,10 +125,3 @@ tests node1 = do
       , testCase "testRemoveLiveProcessInfo"
                  (testRemoteLiveProcessInfo node1)
     ] ]
-
-statsTests :: NT.Transport -> IO [Test]
-statsTests _ = do
-  mkNode "8080" >>= tests >>= return
-
-main :: IO ()
-main = testMain $ statsTests

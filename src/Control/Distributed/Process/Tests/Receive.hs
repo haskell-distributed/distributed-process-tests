@@ -1,17 +1,17 @@
 {-# LANGUAGE TemplateHaskell, DeriveDataTypeable #-}
 {-# OPTIONS_GHC -Wall #-}
-module Control.Distributed.Process.Tests.Receive where
 
+-- | XXX test doesn't work, because failure exceptions don't get propagated. The
+-- test always claims to succeed, even if it failed.
+
+module Control.Distributed.Process.Tests.Receive (tests) where
+
+import Network.Transport.Test (TestTransport(..))
+
+import Network.Transport (Transport)
 import Control.Distributed.Process
 import Control.Distributed.Process.Closure
 import Control.Distributed.Process.Node
-
-import Network.Transport (Transport)
-import Network.Transport.TCP
-  ( createTransportExposeInternals
-  , defaultTCPParameters
-  , TransportInternals(socketBetween)
-  )
 
 import Control.Monad
 import Text.Printf
@@ -82,10 +82,8 @@ recTest4 wait sync r1 r2 = do
       ]
     sendChan sync r
 
-
 master :: Process ()
 master = do
-
   (waits,waitr) <- newChan
   (syncs,syncr) <- newChan
   let go expect = do
@@ -148,22 +146,13 @@ master = do
 
   terminate
 
-
 testReceive :: Transport -> RemoteTable -> Assertion
 testReceive transport rtable = do
   node <- newLocalNode transport rtable
   runProcess node $ master
 
-tests :: (Transport, TransportInternals) -> RemoteTable -> [Test]
-tests (transport, transportInternals) rtable = [
-      testCase "testReceive" (testReceive transport rtable)
-    ]
-
--- NB. test doesn't work, because failure exceptions don't get
--- propagated.  The test always claims to succeed, even if it failed.
-
-main :: IO ()
-main = do
-  Right transport <- createTransportExposeInternals "127.0.0.1" "8080" defaultTCPParameters
-  let rtable = initRemoteTable
-  defaultMain (tests transport rtable)
+tests :: TestTransport -> IO [Test]
+tests TestTransport{..} = do
+    let rtable = initRemoteTable
+    return
+        [ testCase "testReceive" (testReceive testTransport rtable) ]

@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable        #-}
 {-# OPTIONS_GHC -fno-warn-orphans      #-}
-module Control.Distributed.Process.Tests.Tracing where
+module Control.Distributed.Process.Tests.Tracing (tests) where
+
+import Control.Distributed.Process.Tests.Internal.Utils
+import Network.Transport.Test (TestTransport)
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.MVar
@@ -18,8 +21,7 @@ import Control.Distributed.Process.Management
 import Control.Distributed.Process.Node
   ( forkProcess
   , closeLocalNode
-  , LocalNode)
-import qualified Network.Transport as NT
+  )
 
 #if ! MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch, log)
@@ -30,7 +32,6 @@ import Test.Framework
   , testGroup
   )
 import Test.Framework.Providers.HUnit (testCase)
-import Control.Distributed.Process.Tests.Internal.Utils
 
 testSpawnTracing :: TestResult Bool -> Process ()
 testSpawnTracing result = do
@@ -284,8 +285,9 @@ testRemoteTraceRelay result =
     -- and just to be polite...
     liftIO $ closeLocalNode node2
 
-tests :: LocalNode -> IO [Test]
-tests node1 = do
+tests :: TestTransport -> IO [Test]
+tests _ = do
+  node1 <- mkNode "10001"
   -- if we execute the test cases in parallel, the
   -- various tracers will race with one another and
   -- we'll get garbage results (or worse, deadlocks)
@@ -325,10 +327,3 @@ tests node1 = do
                "expected blah"
                node1 True testRemoteTraceRelay lock)
          ] ]
-
-timerTests :: NT.Transport -> IO [Test]
-timerTests _ = do
-  mkNode "8080" >>= tests >>= return
-
-main :: IO ()
-main = testMain $ timerTests
