@@ -3,7 +3,7 @@
 module Control.Distributed.Process.Tests.Tracing (tests) where
 
 import Control.Distributed.Process.Tests.Internal.Utils
-import Network.Transport.Test (TestTransport)
+import Network.Transport.Test (TestTransport(..))
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.MVar
@@ -14,13 +14,10 @@ import Control.Concurrent.MVar
   , takeMVar
   )
 import Control.Distributed.Process
+import Control.Distributed.Process.Node
 import Control.Distributed.Process.Debug
 import Control.Distributed.Process.Management
   ( MxEvent(..)
-  )
-import Control.Distributed.Process.Node
-  ( forkProcess
-  , closeLocalNode
   )
 
 #if ! MIN_VERSION_base(4,6,0)
@@ -227,11 +224,11 @@ testTraceLayering result = do
          })
       liftIO $ putMVar result' ()
 
-testRemoteTraceRelay :: TestResult Bool -> Process ()
-testRemoteTraceRelay result =
+testRemoteTraceRelay :: TestTransport -> TestResult Bool -> Process ()
+testRemoteTraceRelay TestTransport{..} result =
   let flags = defaultTraceFlags { traceSpawned = traceOn }
   in do
-    node2 <- liftIO $ mkNode "8082"
+    node2 <- liftIO $ newLocalNode testTransport initRemoteTable
     mvNid <- liftIO $ newEmptyMVar
 
     -- As well as needing node2's NodeId, we want to
@@ -286,8 +283,8 @@ testRemoteTraceRelay result =
     liftIO $ closeLocalNode node2
 
 tests :: TestTransport -> IO [Test]
-tests _ = do
-  node1 <- mkNode "10001"
+tests testtrans@TestTransport{..} = do
+  node1 <- newLocalNode testTransport initRemoteTable
   -- if we execute the test cases in parallel, the
   -- various tracers will race with one another and
   -- we'll get garbage results (or worse, deadlocks)
@@ -325,5 +322,5 @@ tests _ = do
          , testCase "Remote Trace Relay"
               (synchronisedAssertion
                "expected blah"
-               node1 True testRemoteTraceRelay lock)
+               node1 True (testRemoteTraceRelay testtrans) lock)
          ] ]

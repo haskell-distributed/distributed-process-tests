@@ -6,6 +6,7 @@ import Network.Transport.Test (TestTransport(..))
 
 import Control.Concurrent (threadDelay)
 import Control.Distributed.Process
+import Control.Distributed.Process.Node
 import Control.Distributed.Process.Management
   ( MxEvent(..)
   , MxAgentId(..)
@@ -169,8 +170,8 @@ testAgentTableDelete val result =
     stash result (get1, get2, get3)
 
 tests :: TestTransport -> IO [Test]
-tests _ = do
-  node1 <- mkNode "10001"
+tests TestTransport{..} = do
+  node1 <- newLocalNode testTransport initRemoteTable
   return [
     testGroup "Mx Agents" [
         testCase "Event Handling"

@@ -13,8 +13,6 @@ import Control.Concurrent.MVar
   )
 import Control.Distributed.Process
 import Control.Distributed.Process.Node
-  ( forkProcess
-  , LocalNode)
 import Data.Binary ()
 import Data.Typeable ()
 
@@ -75,8 +73,8 @@ testLocalLiveProcessInfo result = do
 --                         infoMessageQueueLength pInfo == Just 4 &&
                          infoRegisteredNames pInfo == ["foobar"]
 
-testRemoteLiveProcessInfo :: LocalNode -> Assertion
-testRemoteLiveProcessInfo node1 = do
+testRemoteLiveProcessInfo :: TestTransport -> LocalNode -> Assertion
+testRemoteLiveProcessInfo TestTransport{..} node1 = do
   serverAddr <- liftIO $ newEmptyMVar :: IO (MVar ProcessId)
   liftIO $ launchRemote serverAddr
   serverPid <- liftIO $ takeMVar serverAddr
@@ -92,7 +90,7 @@ testRemoteLiveProcessInfo node1 = do
   where
     launchRemote :: MVar ProcessId -> IO ()
     launchRemote locMV = do
-        node2 <- liftIO $ mkNode "8082"
+        node2 <- liftIO $ newLocalNode testTransport initRemoteTable
         _ <- liftIO $ forkProcess node2 $ do
             self <- getSelfPid
             liftIO $ putMVar locMV self
@@ -110,8 +108,8 @@ testRemoteLiveProcessInfo node1 = do
       return a
 
 tests :: TestTransport -> IO [Test]
-tests _ = do
-  node1 <- mkNode "10001"
+tests testtrans@TestTransport{..} = do
+  node1 <- newLocalNode testTransport initRemoteTable
   return [
     testGroup "Process Info" [
         testCase "testLocalDeadProcessInfo"
@@ -123,5 +121,5 @@ tests _ = do
              "expected process-info to be correctly populated"
              node1 True testLocalLiveProcessInfo)
       , testCase "testRemoveLiveProcessInfo"
-                 (testRemoteLiveProcessInfo node1)
+                 (testRemoteLiveProcessInfo testtrans node1)
     ] ]

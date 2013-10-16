@@ -17,16 +17,8 @@ import Control.Distributed.Process.Serializable ()
 import Test.HUnit (Assertion)
 import Test.HUnit.Base (assertBool)
 
-import Network.Transport.TCP
-
 -- these utilities have been cribbed from distributed-process-platform
 -- we should really find a way to share them...
-
-mkNode :: String -> IO LocalNode
-mkNode port = do
-  Right (transport1, _) <- createTransportExposeInternals
-                                    "127.0.0.1" port defaultTCPParameters
-  newLocalNode transport1 initRemoteTable
 
 -- | A mutable cell containing a test result.
 type TestResult a = MVar a
