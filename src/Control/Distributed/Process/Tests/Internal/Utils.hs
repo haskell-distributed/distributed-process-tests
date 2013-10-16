@@ -16,10 +16,8 @@ import Control.Distributed.Process.Node
 import Control.Distributed.Process.Serializable ()
 import Test.HUnit (Assertion)
 import Test.HUnit.Base (assertBool)
-import Test.Framework (Test, defaultMain)
 
 import Network.Transport.TCP
-import qualified Network.Transport as NT
 
 -- these utilities have been cribbed from distributed-process-platform
 -- we should really find a way to share them...
@@ -29,14 +27,6 @@ mkNode port = do
   Right (transport1, _) <- createTransportExposeInternals
                                     "127.0.0.1" port defaultTCPParameters
   newLocalNode transport1 initRemoteTable
-
--- | Given a @builder@ function, make and run a test suite on a single transport
-testMain :: (NT.Transport -> IO [Test]) -> IO ()
-testMain builder = do
-  Right (transport, _) <- createTransportExposeInternals
-                                    "127.0.0.1" "10001" defaultTCPParameters
-  testData <- builder transport
-  defaultMain testData
 
 -- | A mutable cell containing a test result.
 type TestResult a = MVar a
