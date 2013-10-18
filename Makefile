@@ -1,4 +1,7 @@
-# CI build
+# Note that this is basically a carbon copy of cloud-haskell/build.mk,
+# so that since https://github.com/haskell-distributed/cloud-haskell/commit/e23ff71049e77d9feb278fd4492aacbe32e93331
+# we might as well integrate this repo into the umbrella and change *this* makefile
+# to just include ../build.mk
 
 GHC ?= $(shell which ghc)
 CABAL ?= $(shell which cabal)
