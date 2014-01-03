@@ -13,9 +13,12 @@ import Control.Distributed.Process.Management
   , mxAgent
   , mxSink
   , mxReady
+  , mxReceive
+  , mxDeactivate
   , liftMX
   , mxGetLocal
   , mxSetLocal
+  , mxUpdateLocal
   , mxNotify
   , mxBroadcast
   , mxGetId
@@ -25,8 +28,9 @@ import Control.Distributed.Process.Management
   , mxPurgeTable
   , mxDropTable
   )
+import Control.Monad (void)
 import Data.Binary
-import Data.List (find)
+import Data.List (find, sort)
 import Data.Maybe (isJust)
 import Data.Typeable
 import GHC.Generics
@@ -45,7 +49,7 @@ data Publish = Publish
 
 instance Binary Publish where
 
-testAgentBroadcast :: TestResult (Maybe ()) -> Process ()
+testAgentBroadcast :: TestResult () -> Process ()
 testAgentBroadcast result = do
   (resultSP, resultRP) <- newChan :: Process (SendPort (), ReceivePort ())
 
@@ -58,11 +62,73 @@ testAgentBroadcast result = do
     ]
 
   mxNotify ()
-  -- once the publisher has seen our message, it will broadcast the Publish
-  stash result =<< receiveChanTimeout 1000000 resultRP
+  -- Once the publisher has seen our message, it will broadcast the Publish
+  -- and the consumer will see that and send the result to our typed channel.
+  stash result =<< receiveChan resultRP
 
   kill publisher "finished"
-  kill consumer "finished"
+  kill consumer  "finished"
+
+testAgentDualInput :: TestResult (Maybe Int) -> Process ()
+testAgentDualInput result = do
+  (sp, rp) <- newChan
+  _ <- mxAgent (MxAgentId "sum-agent") (0 :: Int) [
+        mxSink $ (\(i :: Int) -> do
+                     mxSetLocal . (+i) =<< mxGetLocal
+                     i' <- mxGetLocal
+                     if i' == 15
+                        then do mxGetLocal >>= liftMX . sendChan sp
+                                mxDeactivate "finished"
+                        else mxReady)
+    ]
+
+  mxNotify          (1 :: Int)
+  nsend "sum-agent" (3 :: Int)
+  mxNotify          (2 :: Int)
+  nsend "sum-agent" (4 :: Int)
+  mxNotify          (5 :: Int)
+
+  stash result =<< receiveChanTimeout 10000000 rp
+
+testAgentPrioritisation :: TestResult [String] -> Process ()
+testAgentPrioritisation result = do
+
+  -- TODO: this isn't really testing how we /prioritise/ one source
+  -- over another at all, but I've not yet figured out the right way
+  -- to do so, since we're at the whim of the scheduler with regards
+  -- the timeliness of nsend versus mxNotify anyway.
+
+  let name = "prioritising-agent"
+  (sp, rp) <- newChan
+  void $ mxAgent (MxAgentId name) ["first"] [
+        mxSink (\(s :: String) -> do
+                   mxUpdateLocal ((s:))
+                   st <- mxGetLocal
+                   case length st of
+                     n | n == 5 -> do liftMX $ sendChan sp st
+                                      mxDeactivate "finished"
+                     _          -> mxReceive  -- go to the mailbox
+                   )
+    ]
+
+  nsend name "second"
+  mxNotify "third"
+  mxNotify "fourth"
+  nsend name "fifth"
+
+  stash result . sort =<< receiveChan rp
+
+testAgentMailboxHandling :: TestResult (Maybe ()) -> Process ()
+testAgentMailboxHandling result = do
+  (sp, rp) <- newChan
+  agent <- mxAgent (MxAgentId "listener-agent") () [
+      mxSink $ \() -> (liftMX $ sendChan sp ()) >> mxReady
+    ]
+
+  nsend "listener-agent" ()
+
+  stash result =<< receiveChanTimeout 1000000 rp
+  kill agent "finished"
 
 testAgentEventHandling :: TestResult Bool -> Process ()
 testAgentEventHandling result = do
@@ -180,8 +246,22 @@ tests TestTransport{..} = do
              node1 True testAgentEventHandling)
       , testCase "Inter-Agent Broadcast"
             (delayedAssertion
-             "expected (Just ()), but no broadcast was received"
-             node1 (Just ()) testAgentBroadcast)
+             "expected (), but no broadcast was received"
+             node1 () testAgentBroadcast)
+      , testCase "Agent Mailbox Handling"
+            (delayedAssertion
+             "expected (Just ()), but no regular (mailbox) input was handled"
+             node1 (Just ()) testAgentMailboxHandling)
+      , testCase "Agent Dual Input Handling"
+            (delayedAssertion
+             "expected sum = 15, but the result was Nothing"
+             node1 (Just 15 :: Maybe Int) testAgentDualInput)
+      , testCase "Agent Input Prioritisation"
+            (delayedAssertion
+             "expected [first, second, third, fourth, fifth], but result diverged"
+             node1 (sort ["first", "second",
+                          "third", "fourth",
+                          "fifth"]) testAgentPrioritisation)
     ],
     testGroup "Mx Global Properties" [
         testCase "Global Property Publication"

@@ -263,8 +263,8 @@ testRemoteTraceRelay TestTransport{..} result =
           stash spawnedPid p
 
           -- Now we wait for (the outer) pid to exit. This won't happen until
-          -- our tracer has seen the trace event for `p' and send `p' the
-          -- message its waiting for prior to exiting
+          -- our tracer has seen the trace event for `p' and sent `p' the
+          -- message it's waiting for prior to exiting
           receiveWait [
             matchIf (\(ProcessMonitorNotification mref' _ _) -> mref == mref')
                     (\_ -> return ())
