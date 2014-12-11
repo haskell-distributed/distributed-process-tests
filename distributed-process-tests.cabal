@@ -28,11 +28,12 @@ library
                      distributed-static,
                      HUnit >= 1.2 && < 1.3,
                      network-transport >= 0.4.1.0 && < 0.5,
-                     network >= 2.3 && < 2.7,
+                     network >= 2.5 && < 2.7,
                      random >= 1.0 && < 1.1,
                      rematch >= 0.1.2.1,
                      test-framework >= 0.6 && < 0.9,
-                     test-framework-hunit >= 0.2.0 && < 0.4
+                     test-framework-hunit >= 0.2.0 && < 0.4,
+                     stm
   hs-source-dirs:    src
   ghc-options:       -Wall -fno-warn-unused-do-bind
   extensions:        CPP,
@@ -52,7 +53,7 @@ Test-Suite TestCH
   CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.CH
   Build-Depends:     base >= 4.4 && < 5,
                      distributed-process-tests,
-                     network >= 2.3 && < 2.5,
+                     network >= 2.3 && < 2.7,
                      network-transport >= 0.4.1.0 && < 0.5,
                      network-transport-tcp >= 0.3 && < 0.5,
                      test-framework >= 0.6 && < 0.9
@@ -66,7 +67,7 @@ Test-Suite TestClosure
   CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Closure
   Build-Depends:     base >= 4.4 && < 5,
                      distributed-process-tests,
-                     network >= 2.3 && < 2.5,
+                     network >= 2.3 && < 2.7,
                      network-transport >= 0.4.1.0 && < 0.5,
                      network-transport-tcp >= 0.3 && < 0.5,
                      test-framework >= 0.6 && < 0.9
@@ -80,7 +81,7 @@ Test-Suite TestStats
   CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Stats
   Build-Depends:     base >= 4.4 && < 5,
                      distributed-process-tests,
-                     network >= 2.3 && < 2.5,
+                     network >= 2.3 && < 2.7,
                      network-transport >= 0.4.1.0 && < 0.5,
                      network-transport-tcp >= 0.3 && < 0.5,
                      test-framework >= 0.6 && < 0.9
@@ -95,7 +96,7 @@ Test-Suite TestMx
   CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Mx
   Build-Depends:     base >= 4.4 && < 5,
                      distributed-process-tests,
-                     network >= 2.3 && < 2.5,
+                     network >= 2.3 && < 2.7,
                      network-transport >= 0.4.1.0 && < 0.5,
                      network-transport-tcp >= 0.3 && < 0.5,
                      test-framework >= 0.6 && < 0.9
@@ -109,7 +110,7 @@ Test-Suite TestTracing
   CPP-Options:       -DTEST_SUITE_MODULE=Control.Distributed.Process.Tests.Tracing
   Build-Depends:     base >= 4.4 && < 5,
                      distributed-process-tests,
-                     network >= 2.3 && < 2.5,
+                     network >= 2.3 && < 2.7,
                      network-transport >= 0.4.1.0 && < 0.5,
                      network-transport-tcp >= 0.3 && < 0.5,
                      test-framework >= 0.6 && < 0.9
