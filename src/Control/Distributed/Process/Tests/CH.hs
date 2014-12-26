@@ -1181,7 +1181,7 @@ testExitRemote TestTransport{..} = do
   supervisorDone <- newEmptyMVar
 
   pid <- forkProcess node1 $ do
-    (liftIO $ threadDelay 100000)
+    (receiveWait [] :: Process ()) -- block forever
       `catchExit` \_from reason -> do
         -- TODO: should verify that 'from' has the right value
         True <- return $ reason == "TestExit"
