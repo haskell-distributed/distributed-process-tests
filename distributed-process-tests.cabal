@@ -1,13 +1,13 @@
 name:          distributed-process-tests
-version:       0.4.1
-synopsis:      Tests for distributed-process.
+version:       0.4.2
+synopsis:      Tests and test support tools for distributed-process.
 homepage:      http://github.com/haskell-distributed/distributed-process-tests
 license:       BSD3
 license-file:  LICENSE
 Author:        Duncan Coutts, Nicolas Wu, Edsko de Vries
 Maintainer:    watson.timothy@gmail.com, edsko@well-typed.com, duncan@well-typed.com
 copyright:     Well-Typed LLP
-category:      Control
+category:      Control, Cloud Haskell
 build-type:    Simple
 cabal-version: >=1.8
 
@@ -24,11 +24,11 @@ library
                      ansi-terminal >= 0.5 && < 0.7,
                      binary >= 0.5 && < 0.8,
                      bytestring >= 0.9 && < 0.11,
-                     distributed-process,
+                     distributed-process >= 0.5.3 && < 0.6,
                      distributed-static,
                      HUnit >= 1.2 && < 1.3,
                      network-transport >= 0.4.1.0 && < 0.5,
-                     network >= 2.3 && < 2.7,
+                     network >= 2.5 && < 2.7,
                      random >= 1.0 && < 1.2,
                      rematch >= 0.1.2.1,
                      test-framework >= 0.6 && < 0.9,
@@ -46,8 +46,6 @@ library
                      RankNTypes,
                      RecordWildCards,
                      ScopedTypeVariables
-  if impl(ghc <= 7.4.2)
-    Build-Depends:   ghc-prim == 0.2.0.0
 
 Test-Suite TestCH
   Type:              exitcode-stdio-1.0
