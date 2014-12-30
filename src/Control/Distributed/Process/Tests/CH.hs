@@ -17,7 +17,7 @@ import Control.Concurrent.MVar
   , takeMVar
   , readMVar
   )
-import Control.Monad (replicateM_, replicateM, forever, void)
+import Control.Monad (replicateM_, replicateM, forever, void, unless)
 import Control.Exception (SomeException, throwIO)
 import qualified Control.Exception as Ex (catch)
 import Control.Applicative ((<$>), (<*>), pure, (<|>))
@@ -104,16 +104,31 @@ math = do
 
 -- | Monitor or link to a remote node
 monitorOrLink :: Bool            -- ^ 'True' for monitor, 'False' for link
-              -> ProcessId       -- Process to monitor/link to
-              -> Maybe (MVar ()) -- MVar to signal on once the monitor has been set up
+              -> ProcessId       -- ^ Process to monitor/link to
+              -> Maybe (MVar ()) -- ^ MVar to signal on once the monitor has been set up
               -> Process (Maybe MonitorRef)
 monitorOrLink mOrL pid mSignal = do
   result <- if mOrL then Just <$> monitor pid
                     else link pid >> return Nothing
   -- Monitor is asynchronous, which usually does not matter but if we want a
-  -- *specific* signal then it does. Therefore we wait an arbitrary delay and
-  -- hope that this means the monitor has been set up
-  forM_ mSignal $ \signal -> liftIO . forkIO $ threadDelay 100000 >> putMVar signal ()
+  --  *specific* signal then it does. Therefore we wait until the MonitorRef is
+  -- listed in the ProcessInfo and hope that this means the monitor has been set
+  -- up.
+  forM_ mSignal $ \signal -> do
+    self <- getSelfPid
+    spawnLocal $ do
+      let waitForMOrL = do
+            liftIO $ threadDelay 100000
+            mpinfo <- getProcessInfo pid
+            case mpinfo of
+              Nothing -> waitForMOrL
+              Just pinfo ->
+               if mOrL then
+                 unless (result == lookup self (infoMonitors pinfo)) waitForMOrL
+               else
+                 unless (elem self $ infoLinks pinfo) waitForMOrL
+      waitForMOrL
+      liftIO $ putMVar signal ()
   return result
 
 monitorTestProcess :: ProcessId       -- Process to monitor/link to
@@ -1181,7 +1196,7 @@ testExitRemote TestTransport{..} = do
   supervisorDone <- newEmptyMVar
 
   pid <- forkProcess node1 $ do
-    (liftIO $ threadDelay 100000)
+    (receiveWait [] :: Process ()) -- block forever
       `catchExit` \_from reason -> do
         -- TODO: should verify that 'from' has the right value
         True <- return $ reason == "TestExit"
