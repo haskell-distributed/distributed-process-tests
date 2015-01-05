@@ -46,6 +46,8 @@ library
                      RankNTypes,
                      RecordWildCards,
                      ScopedTypeVariables
+  if impl(ghc <= 7.4.2)
+    Build-Depends:   ghc-prim == 0.2.0.0
 
 Test-Suite TestCH
   Type:              exitcode-stdio-1.0
