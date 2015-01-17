@@ -4,8 +4,9 @@ module Control.Distributed.Process.Tests.Closure (tests) where
 import Network.Transport.Test (TestTransport(..))
 
 import Data.ByteString.Lazy (empty)
+import Data.IORef
 import Data.Typeable (Typeable)
-import Control.Monad (join, replicateM, forever, replicateM_, void)
+import Control.Monad (join, replicateM, forever, replicateM_, void, when)
 import Control.Exception (IOException, throw)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
@@ -22,8 +23,13 @@ import System.Random (randomIO)
 import Control.Distributed.Process
 import Control.Distributed.Process.Closure
 import Control.Distributed.Process.Node
-import Control.Distributed.Process.Internal.Types (NodeId(nodeAddress))
+import Control.Distributed.Process.Internal.Types
+  ( NodeId(nodeAddress)
+  , createMessage
+  , messageToPayload
+  )
 import Control.Distributed.Static (staticLabel, staticClosure)
+import qualified Network.Transport as NT
 
 import Test.HUnit (Assertion)
 import Test.Framework (Test)
@@ -255,6 +261,49 @@ testSpawn TestTransport{..} rtable = do
 
   takeMVar clientDone
 
+-- | Tests that spawn executes the supplied closure even if the caller dies
+-- immediately after calling spawn.
+--
+-- This situation is of interest because the implementation of spawn has the
+-- remote peer monitor the caller. See DP-99.
+--
+-- The condition is tested by using a transport which refuses to send to the
+-- remote peer the message that it is waiting to stop monitoring the caller,
+-- namely @()@.
+--
+testSpawnRace :: TestTransport -> RemoteTable -> Assertion
+testSpawnRace TestTransport{..} rtable = do
+    node1 <- newLocalNode (wrapTransport testTransport) rtable
+    node2 <- newLocalNode testTransport rtable
+
+    runProcess node1 $ do
+      pid <- getSelfPid
+      spawnLocal $ spawn (localNodeId node2) (sendPidClosure pid) >>= send pid
+      pid'  <- expect :: Process ProcessId
+      pid'' <- expect :: Process ProcessId
+      True <- return $ pid' == pid''
+      return ()
+
+  where
+
+    wrapTransport (NT.Transport ne ct) = NT.Transport (fmap (fmap wrapEP) ne) ct
+
+    wrapEP :: NT.EndPoint -> NT.EndPoint
+    wrapEP e =
+      e { NT.connect = \x y z -> do
+            healthy <- newIORef True
+            fmap (fmap $ wrapConnection healthy) $ NT.connect e x y z
+        }
+
+    wrapConnection :: IORef Bool -> NT.Connection -> NT.Connection
+    wrapConnection healthy (NT.Connection s closeC) =
+      flip NT.Connection closeC $ \msg -> do
+        when (msg == messageToPayload (createMessage ())) $ do
+          writeIORef healthy False
+        isHealthy <- readIORef healthy
+        if isHealthy then s msg
+          else return $ Left $ NT.TransportError NT.SendFailed ""
+
 testCall :: TestTransport -> RemoteTable -> Assertion
 testCall TestTransport{..} rtable = do
   serverNodeAddr <- newEmptyMVar
@@ -455,6 +504,7 @@ tests testtrans = do
         , testCase "SendIOClosure"   (testSendIOClosure   testtrans rtable)
         , testCase "SendProcClosure" (testSendProcClosure testtrans rtable)
         , testCase "Spawn"           (testSpawn           testtrans rtable)
+        , testCase "SpawnRace"       (testSpawnRace       testtrans rtable)
         , testCase "Call"            (testCall            testtrans rtable)
         , testCase "CallBind"        (testCallBind        testtrans rtable)
         , testCase "Seq"             (testSeq             testtrans rtable)
