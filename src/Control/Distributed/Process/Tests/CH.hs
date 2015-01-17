@@ -259,19 +259,20 @@ testMonitorAbnormalTermination TestTransport{..} mOrL un = do
 -- | Monitor a local process that is already dead
 testMonitorLocalDeadProcess :: TestTransport -> Bool -> Bool -> Assertion
 testMonitorLocalDeadProcess TestTransport{..} mOrL un = do
-  processDead <- newEmptyMVar
   processAddr <- newEmptyMVar
   localNode <- newLocalNode testTransport initRemoteTable
   done <- newEmptyMVar
 
   forkIO $ do
-    addr <- forkProcess localNode . liftIO $ putMVar processDead ()
+    addr <- forkProcess localNode $ return ()
     putMVar processAddr addr
 
   forkIO $ do
     theirAddr <- readMVar processAddr
-    readMVar processDead
     runProcess localNode $ do
+      monitor theirAddr
+      -- wait for the process to die
+      ProcessMonitorNotification _ _ _ <- expect
       monitorTestProcess theirAddr mOrL un DiedUnknownId Nothing done
 
   takeMVar done
