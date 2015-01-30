@@ -653,6 +653,26 @@ testRegistry TestTransport{..} = do
 
   takeMVar done
 
+testRegistryRemoteProcess :: TestTransport -> Assertion
+testRegistryRemoteProcess TestTransport{..} = do
+  node1 <- newLocalNode testTransport initRemoteTable
+  node2 <- newLocalNode testTransport initRemoteTable
+  done <- newEmptyMVar
+
+  pingServer <- forkProcess node1 ping
+
+  runProcess node2 $ do
+    register "ping" pingServer
+    Just pid <- whereis "ping"
+    True <- return $ pingServer == pid
+    us <- getSelfPid
+    nsend "ping" (Pong us)
+    Ping pid' <- expect
+    True <- return $ pingServer == pid'
+    liftIO $ putMVar done ()
+
+  takeMVar done
+
 testRemoteRegistry :: TestTransport -> Assertion
 testRemoteRegistry TestTransport{..} = do
   node1 <- newLocalNode testTransport initRemoteTable
@@ -693,6 +713,30 @@ testRemoteRegistry TestTransport{..} = do
        matchIf (\(RegisterReply label' False Nothing) ->
                     "dead" == label' && pid == pingServer)
                (\(RegisterReply _ _ _) -> return ()) ]
+    liftIO $ putMVar done ()
+
+  takeMVar done
+
+testRemoteRegistryRemoteProcess :: TestTransport -> Assertion
+testRemoteRegistryRemoteProcess TestTransport{..} = do
+  node1 <- newLocalNode testTransport initRemoteTable
+  node2 <- newLocalNode testTransport initRemoteTable
+  done <- newEmptyMVar
+
+  pingServer <- forkProcess node2 ping
+
+  runProcess node2 $ do
+    let nid1 = localNodeId node1
+    registerRemoteAsync nid1 "ping" pingServer
+    receiveWait [
+       matchIf (\(RegisterReply label' _ _) -> "ping" == label')
+               (\(RegisterReply _ _ _) -> return ()) ]
+    Just pid <- whereisRemote nid1 "ping"
+    True <- return $ pingServer == pid
+    us <- getSelfPid
+    nsendRemote nid1 "ping" (Pong us)
+    Ping pid' <- expect
+    True <- return $ pingServer == pid'
     liftIO $ putMVar done ()
 
   takeMVar done
@@ -1368,7 +1412,9 @@ tests testtrans = return [
       , testCase "MergeChannels"       (testMergeChannels       testtrans)
       , testCase "Terminate"           (testTerminate           testtrans)
       , testCase "Registry"            (testRegistry            testtrans)
+      , testCase "RegistryRemoteProcess" (testRegistryRemoteProcess      testtrans)
       , testCase "RemoteRegistry"      (testRemoteRegistry      testtrans)
+      , testCase "RemoteRegistryRemoteProcess" (testRemoteRegistryRemoteProcess      testtrans)
       , testCase "SpawnLocal"          (testSpawnLocal          testtrans)
       , testCase "HandleMessageIf"     (testHandleMessageIf     testtrans)
       , testCase "MatchAny"            (testMatchAny            testtrans)
