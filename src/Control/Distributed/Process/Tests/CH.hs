@@ -757,6 +757,52 @@ testReconnect TestTransport{..} = do
 
   takeMVar registerTestOk
 
+-- | Tests that unreliable messages arrive sorted even when there are connection
+-- failures.
+testUSend :: TestTransport -> Int -> Assertion
+testUSend TestTransport{..} numMessages = do
+  [node1, node2] <- replicateM 2 $ newLocalNode testTransport initRemoteTable
+  let nid1 = localNodeId node1
+      nid2 = localNodeId node2
+  processA <- newEmptyMVar
+  usendTestOk <- newEmptyMVar
+
+  forkProcess node1 $ flip catch (\e -> liftIO $ print (e :: SomeException) ) $ do
+    us <- getSelfPid
+    liftIO $ putMVar processA us
+    them <- expect
+    _ <- monitor them
+    let -- Collects messages from 'them' until the sender dies.
+        -- Disconnection notifications are ignored.
+        receiveMessages :: Process [Int]
+        receiveMessages = receiveWait
+              [ match $ \mn -> case mn of
+                  ProcessMonitorNotification _ _ DiedDisconnect -> do
+                    monitor them
+                    receiveMessages
+                  _ -> return []
+              , match $ \i -> fmap (i :) receiveMessages
+              ]
+    msgs <- receiveMessages
+    let -- Checks that the input list is sorted.
+        isSorted :: [Int] -> Bool
+        isSorted (x : xs@(y : _)) = x <= y && isSorted xs
+        isSorted _                = True
+    -- The list can't be null since there are no failures after sending
+    -- the last message.
+    True <- return $ isSorted msgs && not (null msgs)
+    liftIO $ putMVar usendTestOk ()
+
+  forkProcess node2 $ do
+    them <- liftIO $ readMVar processA
+    getSelfPid >>= send them
+    forM_ [1..numMessages] $ \i -> do
+      liftIO $ testBreakConnection (nodeAddress nid1) (nodeAddress nid2)
+      usend them i
+      liftIO (threadDelay 30000)
+
+  takeMVar usendTestOk
+
 -- | Test 'matchAny'. This repeats the 'testMath' but with a proxy server
 -- in between
 testMatchAny :: TestTransport -> Assertion
@@ -1305,6 +1351,8 @@ tests testtrans = return [
       , testCase "TestUnsafeSend"      (testUnsafeSend          testtrans)
       , testCase "TestUnsafeNSend"     (testUnsafeNSend         testtrans)
       , testCase "TestUnsafeSendChan"  (testUnsafeSendChan      testtrans)
+      -- usend
+      , testCase "USend"               (testUSend               testtrans 50)
       ]
   , testGroup "Monitoring and Linking" [
       -- Monitoring processes
