@@ -17,7 +17,7 @@ import Control.Concurrent.MVar
   , takeMVar
   , readMVar
   )
-import Control.Monad (replicateM_, replicateM, forever, void, unless)
+import Control.Monad (replicateM_, replicateM, forever, void, unless, when)
 import Control.Exception (SomeException, throwIO)
 import qualified Control.Exception as Ex (catch)
 import Control.Applicative ((<$>), (<*>), pure, (<|>))
@@ -31,6 +31,8 @@ import Control.Distributed.Process.Internal.Types
   )
 import Control.Distributed.Process.Node
 import Control.Distributed.Process.Serializable (Serializable)
+import Control.Distributed.Process.Debug
+import Control.Distributed.Process.Management.Internal.Types
 
 import Test.HUnit (Assertion, assertFailure)
 import Test.Framework (Test, testGroup)
@@ -1316,6 +1318,102 @@ testUnsafeSendChan TestTransport{..} = do
 
   takeMVar clientDone
 
+testRegistryMonitoring :: TestTransport -> Assertion
+testRegistryMonitoring TestTransport{..} = do
+  localNode <- newLocalNode testTransport initRemoteTable
+  remoteNode <- newLocalNode testTransport initRemoteTable
+
+  -- test local process
+  box <- newEmptyMVar
+  runProcess localNode $ do
+    pid <- spawnLocal $ do
+                expect
+    register "test" pid
+    tpid <- whereis "test"
+    if tpid == Just pid
+      then do _ <- monitor pid
+              send pid ()
+              ProcessMonitorNotification{} <- expect
+              tpid1 <- whereis "test"
+              liftIO $ putMVar box (Nothing == tpid1)
+      else liftIO $ putMVar box False
+  True <- takeMVar box     
+
+  
+  -- test remote process
+  remote1 <- testRemote remoteNode 
+
+  runProcess localNode $
+    let waitpoll = do
+        w <- whereis "test" :: Process (Maybe ProcessId)
+        forM_ w (const waitpoll)
+    in do register "test" remote1
+          send remote1 ()
+          waitpoll
+          return ()
+    
+  -- test many labels
+  remote2 <- testRemote remoteNode
+  runProcess localNode $
+    let waitpoll = do
+        w1 <- whereis "test-3" :: Process (Maybe ProcessId)
+        w2 <- whereis "test-4" :: Process (Maybe ProcessId)
+        forM_ (w1 <|> w2) (const waitpoll)
+    in do register "test-3" remote2
+          register "test-4" remote2
+          send remote2 ()
+          waitpoll
+          return ()
+
+
+  remote3 <- testRemote remoteNode
+  remote4 <- testRemote remoteNode
+  -- test many labels
+  runProcess localNode $ do
+     register "test-3" remote3
+     reregister "test-3" remote4
+     send remote3 ()
+     liftIO $ threadDelay 5000 -- XXX: racy
+     monitor remote4
+     nsend "test-3" ()
+     ProcessMonitorNotification{} <- expect
+     return ()
+
+  remote5 <- testRemote remoteNode 
+  runProcess localNode $ do
+    registerRemoteAsync (localNodeId remoteNode) "test" remote5
+    RegisterReply _ True <- expect
+    send remote5 ()
+    let waitpoll = do
+        whereisRemoteAsync (localNodeId remoteNode) "test"
+        WhereIsReply _ mr <- expect
+        forM_ mr (const waitpoll)
+    waitpoll
+  
+  remote6 <- testRemote localNode 
+  runProcess localNode $ do
+    registerRemoteAsync (localNodeId remoteNode) "test" remote6
+    RegisterReply _ True <- expect
+    send remote6 ()
+    let waitpoll = do
+        whereisRemoteAsync (localNodeId remoteNode) "test"
+        WhereIsReply _ mr <- expect
+        forM_ mr (const waitpoll)
+    waitpoll
+   where
+     testRemote node = do
+       -- test many labels
+       pidBox <- newEmptyMVar
+       forkProcess node $ do
+           us <- getSelfPid
+           liftIO $ putMVar pidBox us
+           expect :: Process ()
+       takeMVar pidBox
+
+        
+    
+
+
 tests :: TestTransport -> IO [Test]
 tests testtrans = return [
     testGroup "Basic features" [
@@ -1347,6 +1445,7 @@ tests testtrans = return [
       , testCase "MaskRestoreScope"    (testMaskRestoreScope    testtrans)
       , testCase "ExitLocal"           (testExitLocal           testtrans)
       , testCase "ExitRemote"          (testExitRemote          testtrans)
+      , testCase "TestRegistryMonitor" (testRegistryMonitoring  testtrans)
       -- Unsafe Primitives
       , testCase "TestUnsafeSend"      (testUnsafeSend          testtrans)
       , testCase "TestUnsafeNSend"     (testUnsafeNSend         testtrans)
