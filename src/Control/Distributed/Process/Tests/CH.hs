@@ -14,7 +14,7 @@ import Data.IORef
   , writeIORef
   , newIORef
   )
-import Control.Concurrent (forkIO, threadDelay, myThreadId, throwTo, ThreadId)
+import Control.Concurrent (forkIO, threadDelay, myThreadId, throwTo, ThreadId, yield)
 import Control.Concurrent.MVar
   ( MVar
   , newEmptyMVar
@@ -1397,12 +1397,11 @@ testCallLocal TestTransport{..} = do
         send keeper caller
         onException
           (callLocal $ do
-                onException (do send keeper ()
+                onException (do send keeper caller
                                 expect)
                             (do liftIO $ writeIORef ibox True))
           (send keeper ())
     caller <- expect
-    ()     <- expect
     exit caller "test"
     ()     <- expect
     return ()
@@ -1417,6 +1416,40 @@ testCallLocal TestTransport{..} = do
   True <- readIORef ibox
   return ()
 
+  -- Test that caller waits for the worker in correct situation
+  ibox3 <- newIORef False
+  result3 <- newEmptyMVar
+  runProcess node $ do
+    keeper <- getSelfPid
+    spawnLocal $ do
+        callLocal $
+            (do us <- getSelfPid
+                send keeper us
+                () <- expect
+                liftIO yield)
+            `finally` (liftIO $ writeIORef ibox3 True)
+        liftIO $ putMVar result3 =<< readIORef ibox3
+    worker <- expect
+    send worker ()
+  True <- takeMVar result3
+  return ()
+
+  -- Test that caller waits for the worker in case when caller gets an exception
+  ibox4 <- newIORef False
+  result4 <- newEmptyMVar
+  runProcess node $ do
+    keeper <- getSelfPid
+    spawnLocal $ do
+        caller <- getSelfPid
+        callLocal
+            ((do send keeper caller
+                 expect)
+               `finally` (liftIO $ writeIORef ibox4 True))
+            `finally` (liftIO $ putMVar result4 =<< readIORef ibox4)
+    caller <- expect
+    exit caller "hi!"
+  True <- takeMVar result4
+  return ()
   -- XXX: Testing that when mask_ $ callLocal p runs p in masked state.
 
 
