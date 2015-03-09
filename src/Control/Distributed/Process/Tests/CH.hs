@@ -771,6 +771,7 @@ testUSend TestTransport{..} numMessages = do
     us <- getSelfPid
     liftIO $ putMVar processA us
     them <- expect
+    send them ()
     _ <- monitor them
     let -- Collects messages from 'them' until the sender dies.
         -- Disconnection notifications are ignored.
@@ -796,6 +797,7 @@ testUSend TestTransport{..} numMessages = do
   forkProcess node2 $ do
     them <- liftIO $ readMVar processA
     getSelfPid >>= send them
+    () <- expect
     forM_ [1..numMessages] $ \i -> do
       liftIO $ testBreakConnection (nodeAddress nid1) (nodeAddress nid2)
       usend them i
