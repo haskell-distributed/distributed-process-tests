@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, KindSignatures #-}
 module Control.Distributed.Process.Tests.Closure (tests) where
 
 import Network.Transport.Test (TestTransport(..))
