@@ -1,9 +1,6 @@
 # distributed-process-tests
 [![travis](https://secure.travis-ci.org/haskell-distributed/distributed-process-tests.png)](http://travis-ci.org/haskell-distributed/distributed-process-tests)
-[![Release](https://img.shields.io/hackage/v/distributed-process-tests.svg)](http://hackage.haskell.org/package/distributed-process-tests)
-
-azure-service-api is made available under a BSD-3 license.
-This repository is part of Cloud Haskell.
+[![Release](https://img.shields.io/hackage/v/distributed-process-tests.svg)](https://hackage.haskell.org/package/distributed-process-tests)
 
 See http://haskell-distributed.github.com for documentation, user guides,
 tutorials and assistance.
