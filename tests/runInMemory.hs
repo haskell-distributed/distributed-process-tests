@@ -16,8 +16,7 @@ main = do
     (transport, internals) <- createTransportExposeInternals
     ts <- tests TestTransport
       { testTransport = transport
-      , testBreakConnection = \addr1 addr2 -> do breakConnection internals addr1 addr2 "user error"
-                                                 threadDelay 100000
+      , testBreakConnection = \addr1 addr2 -> breakConnection internals addr1 addr2 "user error"
       }
     args <- getArgs
     -- Tests are time sensitive. Running the tests concurrently can slow them
