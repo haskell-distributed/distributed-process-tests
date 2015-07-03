@@ -1320,7 +1320,7 @@ testUnsafeSendChan TestTransport{..} = do
 
 tests :: TestTransport -> IO [Test]
 tests testtrans = return [
-    testGroup "Basic features" [
+     testGroup "Basic features" [
         testCase "Ping"                (testPing                testtrans)
       , testCase "Math"                (testMath                testtrans)
       , testCase "Timeout"             (testTimeout             testtrans)
@@ -1356,7 +1356,7 @@ tests testtrans = return [
       -- usend
       , testCase "USend"               (testUSend               testtrans 50)
       ]
-  , testGroup "Monitoring and Linking" [
+    , testGroup "Monitoring and Linking" [
       -- Monitoring processes
       --
       -- The "missing" combinations in the list below don't make much sense, as
