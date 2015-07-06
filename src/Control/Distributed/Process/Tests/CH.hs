@@ -21,7 +21,7 @@ import Control.Monad (replicateM_, replicateM, forever, void, unless)
 import Control.Exception (SomeException, throwIO)
 import qualified Control.Exception as Ex (catch)
 import Control.Applicative ((<$>), (<*>), pure, (<|>))
-import qualified Network.Transport as NT (closeEndPoint)
+import qualified Network.Transport as NT (closeEndPoint, EndPointAddress)
 import Control.Distributed.Process
 import Control.Distributed.Process.Internal.Types
   ( NodeId(nodeAddress)
@@ -302,19 +302,25 @@ testMonitorRemoteDeadProcess TestTransport{..} mOrL un = do
 testMonitorDisconnect :: TestTransport -> Bool -> Bool -> Assertion
 testMonitorDisconnect TestTransport{..} mOrL un = do
   processAddr <- newEmptyMVar
+  processAddr2 <- newEmptyMVar
   monitorSetup <- newEmptyMVar
   done <- newEmptyMVar
 
   forkIO $ do
     localNode <- newLocalNode testTransport initRemoteTable
-    addr <- forkProcess localNode . liftIO $ threadDelay 1000000
+    addr <- forkProcess localNode $ expect
+    addr2 <- forkProcess localNode $ return ()
     putMVar processAddr addr
     readMVar monitorSetup
     NT.closeEndPoint (localEndPoint localNode)
+    putMVar processAddr2 addr2
 
   forkIO $ do
     localNode <- newLocalNode testTransport initRemoteTable
     theirAddr <- readMVar processAddr
+    forkProcess localNode $ do
+      lc <- liftIO $ readMVar processAddr2
+      send lc ()
     runProcess localNode $ do
       monitorTestProcess theirAddr mOrL un DiedDisconnect (Just monitorSetup) done
 
@@ -583,17 +589,22 @@ testMonitorLiveNode :: TestTransport -> Assertion
 testMonitorLiveNode TestTransport{..} = do
   [node1, node2] <- replicateM 2 $ newLocalNode testTransport initRemoteTable
   ready <- newEmptyMVar
+  readyr <- newEmptyMVar
   done <- newEmptyMVar
 
+  p <- forkProcess node1 $ return ()
   forkProcess node2 $ do
     ref <- monitorNode (localNodeId node1)
     liftIO $ putMVar ready ()
+    liftIO $ takeMVar readyr
+    send p ()
     NodeMonitorNotification ref' nid _ <- expect
     True <- return $ ref == ref' && nid == localNodeId node1
     liftIO $ putMVar done ()
 
   takeMVar ready
   closeLocalNode node1
+  putMVar readyr ()
 
   takeMVar done
 
@@ -688,7 +699,6 @@ testReconnect :: TestTransport -> Assertion
 testReconnect TestTransport{..} = do
   [node1, node2] <- replicateM 2 $ newLocalNode testTransport initRemoteTable
   let nid1 = localNodeId node1
-      nid2 = localNodeId node2
   processA <- newEmptyMVar
   [sendTestOk, registerTestOk] <- replicateM 2 newEmptyMVar
 
@@ -709,7 +719,8 @@ testReconnect TestTransport{..} = do
     send them "message 1" >> liftIO (threadDelay 100000)
 
     -- Simulate network failure
-    liftIO $ testBreakConnection (nodeAddress nid1) (nodeAddress nid2)
+    liftIO $ syncBreakConnection testBreakConnection node1 node2
+
 
     -- Should not arrive
     send them "message 2"
@@ -734,7 +745,7 @@ testReconnect TestTransport{..} = do
 
 
     -- Simulate network failure
-    liftIO $ testBreakConnection (nodeAddress nid1) (nodeAddress nid2)
+    liftIO $ syncBreakConnection testBreakConnection node1 node2
 
     -- This will happen due to implicit reconnect
     registerRemoteAsync nid1 "b" us
@@ -1320,7 +1331,7 @@ testUnsafeSendChan TestTransport{..} = do
 
 tests :: TestTransport -> IO [Test]
 tests testtrans = return [
-    testGroup "Basic features" [
+     testGroup "Basic features" [
         testCase "Ping"                (testPing                testtrans)
       , testCase "Math"                (testMath                testtrans)
       , testCase "Timeout"             (testTimeout             testtrans)
@@ -1356,7 +1367,7 @@ tests testtrans = return [
       -- usend
       , testCase "USend"               (testUSend               testtrans 50)
       ]
-  , testGroup "Monitoring and Linking" [
+    , testGroup "Monitoring and Linking" [
       -- Monitoring processes
       --
       -- The "missing" combinations in the list below don't make much sense, as
@@ -1388,3 +1399,17 @@ tests testtrans = return [
     , testCase "Reconnect"                    (testReconnect                  testtrans)
     ]
   ]
+
+syncBreakConnection :: (NT.EndPointAddress -> NT.EndPointAddress -> IO ()) -> LocalNode -> LocalNode -> IO ()
+syncBreakConnection breakConnection nid0 nid1 = do
+  m <- newEmptyMVar
+  _ <- forkProcess nid1 $ getSelfPid >>= liftIO . putMVar m
+  runProcess nid0 $ do
+    them <- liftIO $ takeMVar m
+    pinger <- spawnLocal $ forever $ send them ()
+    _ <- monitorNode (localNodeId nid1)
+    liftIO $ breakConnection (nodeAddress $ localNodeId nid0)
+                             (nodeAddress $ localNodeId nid1)
+    NodeMonitorNotification _ _ _ <- expect
+    kill pinger "finished"
+    return ()

@@ -1,16 +1,11 @@
 -- Run tests using the TCP transport.
---
+
 module Main where
 
 import TEST_SUITE_MODULE (tests)
 
 import Network.Transport.Test (TestTransport(..))
-import Network.Socket (sClose)
-import Network.Transport.TCP
-  ( createTransportExposeInternals
-  , TransportInternals(socketBetween)
-  , defaultTCPParameters
-  )
+import Network.Transport.InMemory
 import Test.Framework (defaultMainWithArgs)
 
 import Control.Concurrent (threadDelay)
@@ -18,14 +13,10 @@ import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-    Right (transport, internals) <-
-      createTransportExposeInternals "127.0.0.1" "8080" defaultTCPParameters
+    (transport, internals) <- createTransportExposeInternals
     ts <- tests TestTransport
       { testTransport = transport
-      , testBreakConnection = \addr1 addr2 -> do
-          sock <- socketBetween internals addr1 addr2
-          sClose sock
-          threadDelay 10000
+      , testBreakConnection = \addr1 addr2 -> breakConnection internals addr1 addr2 "user error"
       }
     args <- getArgs
     -- Tests are time sensitive. Running the tests concurrently can slow them
