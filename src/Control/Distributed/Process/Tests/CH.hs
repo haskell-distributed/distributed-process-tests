@@ -1229,15 +1229,18 @@ testExitLocal TestTransport{..} = do
   localNode <- newLocalNode testTransport initRemoteTable
   supervisedDone <- newEmptyMVar
   supervisorDone <- newEmptyMVar
+  -- XXX: we guarantee that exception handler will be set up
+  -- regardless if forkProcess preserve masking state or not.
+  handlerSetUp <- newEmptyMVar
 
   pid <- forkProcess localNode $ do
-    (liftIO $ threadDelay 100000)
-      `catchExit` \_from reason -> do
+    (liftIO (putMVar handlerSetUp ()) >> expect) `catchExit` \_from reason -> do
         -- TODO: should verify that 'from' has the right value
         True <- return $ reason == "TestExit"
         liftIO $ putMVar supervisedDone ()
 
   runProcess localNode $ do
+    liftIO $ takeMVar handlerSetUp
     ref <- monitor pid
     exit pid "TestExit"
     -- This time the client catches the exception, so it dies normally
