@@ -635,6 +635,7 @@ testRegistry TestTransport{..} = do
   done <- newEmptyMVar
 
   pingServer <- forkProcess node ping
+  deadProcess <- forkProcess node (return ())
 
   runProcess node $ do
     register "ping" pingServer
@@ -644,6 +645,10 @@ testRegistry TestTransport{..} = do
     nsend "ping" (Pong us)
     Ping pid' <- expect
     True <- return $ pingServer == pid'
+    Left (ProcessRegistrationException "dead" Nothing)  <- try $ register "dead" deadProcess
+    Left (ProcessRegistrationException "ping" (Just x)) <- try $ register "ping" deadProcess
+    True <- return $ x == pingServer
+    Left (ProcessRegistrationException "dead" Nothing) <- try $ unregister "dead"
     liftIO $ putMVar done ()
 
   takeMVar done
@@ -655,12 +660,14 @@ testRemoteRegistry TestTransport{..} = do
   done <- newEmptyMVar
 
   pingServer <- forkProcess node1 ping
+  deadProcess <- forkProcess node1 (return ())
 
   runProcess node2 $ do
     let nid1 = localNodeId node1
     registerRemoteAsync nid1 "ping" pingServer
     receiveWait [
-       matchIf (\(RegisterReply label' _ _) -> "ping" == label')
+       matchIf (\(RegisterReply label' _ (Just pid)) ->
+                    "ping" == label' && pid == pingServer)
                (\(RegisterReply _ _ _) -> return ()) ]
 
     Just pid <- whereisRemote nid1 "ping"
@@ -669,6 +676,23 @@ testRemoteRegistry TestTransport{..} = do
     nsendRemote nid1 "ping" (Pong us)
     Ping pid' <- expect
     True <- return $ pingServer == pid'
+
+    -- test that if process was not registered Nothing is returned
+    -- in owner field.
+    registerRemoteAsync nid1 "dead" deadProcess
+    receiveWait [
+       matchIf (\(RegisterReply label' False Nothing) -> "dead" == label')
+               (\(RegisterReply _ _ _) -> return ()) ]
+    registerRemoteAsync nid1 "ping" deadProcess
+    receiveWait [
+       matchIf (\(RegisterReply label' False (Just pid)) ->
+                    "ping" == label' && pid == pingServer)
+               (\(RegisterReply _ _ _) -> return ()) ]
+    unregisterRemoteAsync nid1 "dead"
+    receiveWait [
+       matchIf (\(RegisterReply label' False Nothing) ->
+                    "dead" == label' && pid == pingServer)
+               (\(RegisterReply _ _ _) -> return ()) ]
     liftIO $ putMVar done ()
 
   takeMVar done
