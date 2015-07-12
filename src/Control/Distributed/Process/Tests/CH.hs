@@ -660,8 +660,8 @@ testRemoteRegistry TestTransport{..} = do
     let nid1 = localNodeId node1
     registerRemoteAsync nid1 "ping" pingServer
     receiveWait [
-       matchIf (\(RegisterReply label' _) -> "ping" == label')
-               (\(RegisterReply _ _) -> return ()) ]
+       matchIf (\(RegisterReply label' _ _) -> "ping" == label')
+               (\(RegisterReply _ _ _) -> return ()) ]
 
     Just pid <- whereisRemote nid1 "ping"
     True <- return $ pingServer == pid
@@ -738,8 +738,8 @@ testReconnect TestTransport{..} = do
     us <- getSelfPid
     registerRemoteAsync nid1 "a" us -- registerRemote is asynchronous
     receiveWait [
-        matchIf (\(RegisterReply label' _) -> "a" == label')
-                (\(RegisterReply _ _) -> return ()) ]
+        matchIf (\(RegisterReply label' _ _) -> "a" == label')
+                (\(RegisterReply _ _ _) -> return ()) ]
 
     Just _  <- whereisRemote nid1 "a"
 
@@ -750,14 +750,14 @@ testReconnect TestTransport{..} = do
     -- This will happen due to implicit reconnect
     registerRemoteAsync nid1 "b" us
     receiveWait [
-        matchIf (\(RegisterReply label' _) -> "b" == label')
-                (\(RegisterReply _ _) -> return ()) ]
+        matchIf (\(RegisterReply label' _ _) -> "b" == label')
+                (\(RegisterReply _ _ _) -> return ()) ]
 
     -- Should happen
     registerRemoteAsync nid1 "c" us
     receiveWait [
-        matchIf (\(RegisterReply label' _) -> "c" == label')
-                (\(RegisterReply _ _) -> return ()) ]
+        matchIf (\(RegisterReply label' _ _) -> "c" == label')
+                (\(RegisterReply _ _ _) -> return ()) ]
 
     -- Check
     Nothing  <- whereisRemote nid1 "a"  -- this will fail because the name is removed when the node is disconnected
