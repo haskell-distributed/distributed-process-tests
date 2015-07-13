@@ -199,7 +199,7 @@ testMonitorUnreachable TestTransport{..} mOrL un = do
 
   forkIO $ do
     localNode <- newLocalNode testTransport initRemoteTable
-    addr <- forkProcess localNode . liftIO $ threadDelay 1000000
+    addr <- forkProcess localNode expect
     closeLocalNode localNode
     putMVar deadProcess addr
 
