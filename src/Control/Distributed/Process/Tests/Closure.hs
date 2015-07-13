@@ -6,7 +6,8 @@ import Network.Transport.Test (TestTransport(..))
 import Data.ByteString.Lazy (empty)
 import Data.IORef
 import Data.Typeable (Typeable)
-import Control.Monad (join, replicateM, forever, replicateM_, void, when)
+import Data.Maybe
+import Control.Monad (join, replicateM, forever, replicateM_, void, when, unless)
 import Control.Exception (IOException, throw)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
@@ -63,6 +64,9 @@ sendPid toPid = do
 wait :: Int -> Process ()
 wait = liftIO . threadDelay
 
+expectUnit :: Process ()
+expectUnit = expect
+
 isPrime :: Integer -> Process Bool
 isPrime n = return . (n `elem`) . takeWhile (<= n) . sieve $ [2..]
   where
@@ -85,6 +89,7 @@ remotable [ 'factorial
           , 'sendPid
           , 'sdictInt
           , 'wait
+          , 'expectUnit
           , 'typedPingServer
           , 'isPrime
           , 'quintuple
@@ -141,11 +146,19 @@ factorial' n = returnCP $(mkStatic 'sdictInt) n `bindCP` factorialOf
 waitClosure :: Int -> Closure (Process ())
 waitClosure = $(mkClosure 'wait)
 
-simulateNetworkFailure :: TestTransport -> NodeId -> NodeId -> Process ()
+simulateNetworkFailure :: TestTransport -> LocalNode -> LocalNode -> Process ()
 simulateNetworkFailure TestTransport{..} from to = liftIO $ do
-  threadDelay 10000
-  testBreakConnection (nodeAddress from) (nodeAddress to)
-  threadDelay 10000
+  m <- newEmptyMVar
+  _ <- forkProcess to $ getSelfPid >>= liftIO . putMVar m
+  runProcess from $ do
+    them <- liftIO $ takeMVar m
+    pinger <- spawnLocal $ forever $ send them ()
+    _ <- monitorNode (localNodeId to)
+    liftIO $ testBreakConnection (nodeAddress $ localNodeId from)
+                                 (nodeAddress $ localNodeId to)
+    NodeMonitorNotification _ _ _ <- expect
+    kill pinger "finished"
+    return ()
 
 --------------------------------------------------------------------------------
 -- The tests proper                                                           --
@@ -363,19 +376,35 @@ testSpawnSupervised TestTransport{..} rtable = do
     [node1, node2]       <- replicateM 2 $ newLocalNode testTransport rtable
     [superPid, childPid] <- replicateM 2 $ newEmptyMVar
     thirdProcessDone     <- newEmptyMVar
+    linkUp               <- newEmptyMVar
 
     forkProcess node1 $ do
       us <- getSelfPid
       liftIO $ putMVar superPid us
-      (child, _ref) <- spawnSupervised (localNodeId node2) (waitClosure 1000000)
-      liftIO $ do
-        putMVar childPid child
-        threadDelay 500000 -- Give the child a chance to link to us
-        throw supervisorDeath
+      (child, _ref) <- spawnSupervised (localNodeId node2)
+                                       (sendPidClosure us `seqCP` $(mkStaticClosure 'expectUnit))
+      _ <- expect :: Process ProcessId
+
+      liftIO $ do putMVar childPid child
+                  -- Give the child a chance to link to us
+                  takeMVar linkUp
+      throw supervisorDeath
 
     forkProcess node2 $ do
       [super, child] <- liftIO $ mapM readMVar [superPid, childPid]
       ref <- monitor child
+      self <- getSelfPid
+      let waitForMOrL = do
+            liftIO $ threadDelay 10000
+            mpinfo <- getProcessInfo child
+            case mpinfo of
+              Nothing -> waitForMOrL
+              Just pinfo ->
+                 unless (isJust $ lookup self (infoMonitors pinfo)) waitForMOrL
+      waitForMOrL
+      liftIO $ putMVar linkUp ()
+      -- because monitor message was sent before message to process
+      -- we hope that it will be processed before
       ProcessMonitorNotification ref' pid' (DiedException e) <- expect
       True <- return $ ref' == ref
                     && pid' == child
@@ -465,7 +494,7 @@ testSpawnReconnect testtrans@TestTransport{..} rtable = do
 
   forkProcess node2 $ do
     _pid1 <- spawn nid1 ($(mkClosure 'signal) incr)
-    simulateNetworkFailure testtrans nid2 nid1
+    simulateNetworkFailure testtrans node2 node1
     _pid2 <- spawn nid1 ($(mkClosure 'signal) incr)
     _pid3 <- spawn nid1 ($(mkClosure 'signal) incr)
 
