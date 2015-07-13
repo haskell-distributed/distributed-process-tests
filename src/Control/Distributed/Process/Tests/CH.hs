@@ -635,6 +635,7 @@ testRegistry TestTransport{..} = do
   done <- newEmptyMVar
 
   pingServer <- forkProcess node ping
+  deadProcess <- forkProcess node (return ())
 
   runProcess node $ do
     register "ping" pingServer
@@ -644,6 +645,10 @@ testRegistry TestTransport{..} = do
     nsend "ping" (Pong us)
     Ping pid' <- expect
     True <- return $ pingServer == pid'
+    Left (ProcessRegistrationException "dead" Nothing)  <- try $ register "dead" deadProcess
+    Left (ProcessRegistrationException "ping" (Just x)) <- try $ register "ping" deadProcess
+    True <- return $ x == pingServer
+    Left (ProcessRegistrationException "dead" Nothing) <- try $ unregister "dead"
     liftIO $ putMVar done ()
 
   takeMVar done
@@ -655,13 +660,15 @@ testRemoteRegistry TestTransport{..} = do
   done <- newEmptyMVar
 
   pingServer <- forkProcess node1 ping
+  deadProcess <- forkProcess node1 (return ())
 
   runProcess node2 $ do
     let nid1 = localNodeId node1
     registerRemoteAsync nid1 "ping" pingServer
     receiveWait [
-       matchIf (\(RegisterReply label' _) -> "ping" == label')
-               (\(RegisterReply _ _) -> return ()) ]
+       matchIf (\(RegisterReply label' _ (Just pid)) ->
+                    "ping" == label' && pid == pingServer)
+               (\(RegisterReply _ _ _) -> return ()) ]
 
     Just pid <- whereisRemote nid1 "ping"
     True <- return $ pingServer == pid
@@ -669,6 +676,23 @@ testRemoteRegistry TestTransport{..} = do
     nsendRemote nid1 "ping" (Pong us)
     Ping pid' <- expect
     True <- return $ pingServer == pid'
+
+    -- test that if process was not registered Nothing is returned
+    -- in owner field.
+    registerRemoteAsync nid1 "dead" deadProcess
+    receiveWait [
+       matchIf (\(RegisterReply label' False Nothing) -> "dead" == label')
+               (\(RegisterReply _ _ _) -> return ()) ]
+    registerRemoteAsync nid1 "ping" deadProcess
+    receiveWait [
+       matchIf (\(RegisterReply label' False (Just pid)) ->
+                    "ping" == label' && pid == pingServer)
+               (\(RegisterReply _ _ _) -> return ()) ]
+    unregisterRemoteAsync nid1 "dead"
+    receiveWait [
+       matchIf (\(RegisterReply label' False Nothing) ->
+                    "dead" == label' && pid == pingServer)
+               (\(RegisterReply _ _ _) -> return ()) ]
     liftIO $ putMVar done ()
 
   takeMVar done
@@ -738,8 +762,8 @@ testReconnect TestTransport{..} = do
     us <- getSelfPid
     registerRemoteAsync nid1 "a" us -- registerRemote is asynchronous
     receiveWait [
-        matchIf (\(RegisterReply label' _) -> "a" == label')
-                (\(RegisterReply _ _) -> return ()) ]
+        matchIf (\(RegisterReply label' _ _) -> "a" == label')
+                (\(RegisterReply _ _ _) -> return ()) ]
 
     Just _  <- whereisRemote nid1 "a"
 
@@ -750,14 +774,14 @@ testReconnect TestTransport{..} = do
     -- This will happen due to implicit reconnect
     registerRemoteAsync nid1 "b" us
     receiveWait [
-        matchIf (\(RegisterReply label' _) -> "b" == label')
-                (\(RegisterReply _ _) -> return ()) ]
+        matchIf (\(RegisterReply label' _ _) -> "b" == label')
+                (\(RegisterReply _ _ _) -> return ()) ]
 
     -- Should happen
     registerRemoteAsync nid1 "c" us
     receiveWait [
-        matchIf (\(RegisterReply label' _) -> "c" == label')
-                (\(RegisterReply _ _) -> return ()) ]
+        matchIf (\(RegisterReply label' _ _) -> "c" == label')
+                (\(RegisterReply _ _ _) -> return ()) ]
 
     -- Check
     Nothing  <- whereisRemote nid1 "a"  -- this will fail because the name is removed when the node is disconnected
