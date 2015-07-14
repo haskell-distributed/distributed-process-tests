@@ -17,7 +17,7 @@ import Control.Concurrent.MVar
   , takeMVar
   , readMVar
   )
-import Control.Monad (replicateM_, replicateM, forever, void, unless)
+import Control.Monad (replicateM_, replicateM, forever, void, unless, join)
 import Control.Exception (SomeException, throwIO)
 import qualified Control.Exception as Ex (catch)
 import Control.Applicative ((<$>), (<*>), pure, (<|>))
@@ -719,6 +719,21 @@ testSpawnLocal TestTransport{..} = do
 
   takeMVar done
 
+testSpawnAsyncStrictness :: TestTransport -> Assertion
+testSpawnAsyncStrictness TestTransport{..} = do
+  node <- newLocalNode testTransport initRemoteTable
+  done <- newEmptyMVar
+
+  runProcess node $ do
+    here <-getSelfNode
+
+    ev <- try $ spawnAsync here (error "boom")
+    liftIO $ case ev of
+      Right _ -> putMVar done (error "Exception didn't fire")
+      Left (_::SomeException) -> putMVar done (return ())
+
+  join $ takeMVar done
+
 testReconnect :: TestTransport -> Assertion
 testReconnect TestTransport{..} = do
   [node1, node2] <- replicateM 2 $ newLocalNode testTransport initRemoteTable
@@ -1370,6 +1385,7 @@ tests testtrans = return [
       , testCase "Registry"            (testRegistry            testtrans)
       , testCase "RemoteRegistry"      (testRemoteRegistry      testtrans)
       , testCase "SpawnLocal"          (testSpawnLocal          testtrans)
+      , testCase "SpawnAsyncStrictness" (testSpawnAsyncStrictness testtrans)
       , testCase "HandleMessageIf"     (testHandleMessageIf     testtrans)
       , testCase "MatchAny"            (testMatchAny            testtrans)
       , testCase "MatchAnyHandle"      (testMatchAnyHandle      testtrans)
