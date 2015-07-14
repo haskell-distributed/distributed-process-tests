@@ -9,7 +9,12 @@ import Network.Transport.Test (TestTransport(..))
 import Data.Binary (Binary(..))
 import Data.Typeable (Typeable)
 import Data.Foldable (forM_)
-import Control.Concurrent (forkIO, threadDelay, myThreadId, throwTo, ThreadId)
+import Data.IORef
+  ( readIORef
+  , writeIORef
+  , newIORef
+  )
+import Control.Concurrent (forkIO, threadDelay, myThreadId, throwTo, ThreadId, yield)
 import Control.Concurrent.MVar
   ( MVar
   , newEmptyMVar
@@ -18,7 +23,7 @@ import Control.Concurrent.MVar
   , readMVar
   )
 import Control.Monad (replicateM_, replicateM, forever, void, unless, join)
-import Control.Exception (SomeException, throwIO)
+import Control.Exception (SomeException, throwIO, ErrorCall(..))
 import qualified Control.Exception as Ex (catch)
 import Control.Applicative ((<$>), (<*>), pure, (<|>))
 import qualified Network.Transport as NT (closeEndPoint, EndPointAddress)
@@ -1371,6 +1376,86 @@ testUnsafeSendChan TestTransport{..} = do
 
   takeMVar clientDone
 
+testCallLocal :: TestTransport -> Assertion
+testCallLocal TestTransport{..} = do
+  node <- newLocalNode testTransport initRemoteTable
+
+  -- Testing that (/=) <$> getSelfPid <*> callLocal getSelfPid.
+  result <- newEmptyMVar
+  runProcess node $ do
+    r <- (/=) <$> getSelfPid <*> callLocal getSelfPid
+    liftIO $ putMVar result r
+  True <- takeMVar result
+  return ()
+
+  -- Testing that when callLocal is interrupted, the worker is interrupted.
+  ibox <- newIORef False
+  runProcess node $ do
+    keeper <- getSelfPid
+    spawnLocal $ do
+        caller <- getSelfPid
+        send keeper caller
+        onException
+          (callLocal $ do
+                onException (do send keeper caller
+                                expect)
+                            (do liftIO $ writeIORef ibox True))
+          (send keeper ())
+    caller <- expect
+    exit caller "test"
+    ()     <- expect
+    return ()
+  True <- readIORef ibox
+  return ()
+
+  -- Testing that when the worker raises an exception, the exception is propagated to the parent.
+  ibox2 <- newIORef False
+  runProcess node $ do
+    r <- try (callLocal $ error "e" >> return ())
+    liftIO $ writeIORef ibox2 (r == Left (ErrorCall "e"))
+  True <- readIORef ibox
+  return ()
+
+  -- Test that caller waits for the worker in correct situation
+  ibox3 <- newIORef False
+  result3 <- newEmptyMVar
+  runProcess node $ do
+    keeper <- getSelfPid
+    spawnLocal $ do
+        callLocal $
+            (do us <- getSelfPid
+                send keeper us
+                () <- expect
+                liftIO yield)
+            `finally` (liftIO $ writeIORef ibox3 True)
+        liftIO $ putMVar result3 =<< readIORef ibox3
+    worker <- expect
+    send worker ()
+  True <- takeMVar result3
+  return ()
+
+  -- Test that caller waits for the worker in case when caller gets an exception
+  ibox4 <- newIORef False
+  result4 <- newEmptyMVar
+  runProcess node $ do
+    keeper <- getSelfPid
+    spawnLocal $ do
+        caller <- getSelfPid
+        callLocal
+            ((do send keeper caller
+                 expect)
+               `finally` (liftIO $ writeIORef ibox4 True))
+            `finally` (liftIO $ putMVar result4 =<< readIORef ibox4)
+    caller <- expect
+    exit caller "hi!"
+  True <- takeMVar result4
+  return ()
+  -- XXX: Testing that when mask_ $ callLocal p runs p in masked state.
+
+
+
+
+
 tests :: TestTransport -> IO [Test]
 tests testtrans = return [
      testGroup "Basic features" [
@@ -1403,6 +1488,7 @@ tests testtrans = return [
       , testCase "MaskRestoreScope"    (testMaskRestoreScope    testtrans)
       , testCase "ExitLocal"           (testExitLocal           testtrans)
       , testCase "ExitRemote"          (testExitRemote          testtrans)
+      , testCase "TextCallLocal"       (testCallLocal           testtrans)
       -- Unsafe Primitives
       , testCase "TestUnsafeSend"      (testUnsafeSend          testtrans)
       , testCase "TestUnsafeNSend"     (testUnsafeNSend         testtrans)
