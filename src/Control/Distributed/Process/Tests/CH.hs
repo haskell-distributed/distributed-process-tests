@@ -1456,7 +1456,9 @@ testCallLocal TestTransport{..} = do
   ibox2 <- newIORef False
   runProcess node $ do
     r <- try (callLocal $ error "e" >> return ())
-    liftIO $ writeIORef ibox2 (r == Left (ErrorCall "e"))
+    liftIO $ writeIORef ibox2 $ case r of
+      Left (ErrorCall "e") -> True
+      _ -> False
   True <- readIORef ibox
   return ()
 
