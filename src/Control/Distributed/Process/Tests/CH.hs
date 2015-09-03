@@ -33,6 +33,7 @@ import Control.Distributed.Process.Internal.Types
   , LocalNode(localEndPoint)
   , ProcessExitException(..)
   , nullProcessId
+  , createUnencodedMessage
   )
 import Control.Distributed.Process.Node
 import Control.Distributed.Process.Serializable (Serializable)
@@ -858,8 +859,9 @@ testReconnect TestTransport{..} = do
 
 -- | Tests that unreliable messages arrive sorted even when there are connection
 -- failures.
-testUSend :: TestTransport -> Int -> Assertion
-testUSend TestTransport{..} numMessages = do
+testUSend :: (ProcessId -> Int -> Process ())
+          -> TestTransport -> Int -> Assertion
+testUSend usendPrim TestTransport{..} numMessages = do
   [node1, node2] <- replicateM 2 $ newLocalNode testTransport initRemoteTable
   let nid1 = localNodeId node1
       nid2 = localNodeId node2
@@ -899,7 +901,7 @@ testUSend TestTransport{..} numMessages = do
     () <- expect
     forM_ [1..numMessages] $ \i -> do
       liftIO $ testBreakConnection (nodeAddress nid1) (nodeAddress nid2)
-      usend them i
+      usendPrim them i
       liftIO (threadDelay 30000)
 
   takeMVar usendTestOk
@@ -1542,7 +1544,11 @@ tests testtrans = return [
       , testCase "TestUnsafeNSend"     (testUnsafeNSend         testtrans)
       , testCase "TestUnsafeSendChan"  (testUnsafeSendChan      testtrans)
       -- usend
-      , testCase "USend"               (testUSend               testtrans 50)
+      , testCase "USend"               (testUSend usend         testtrans 50)
+      , testCase "UForward"
+                 (testUSend (\p m -> uforward (createUnencodedMessage m) p)
+                            testtrans 50
+                 )
       ]
     , testGroup "Monitoring and Linking" [
       -- Monitoring processes
