@@ -1385,6 +1385,26 @@ testUnsafeSend TestTransport{..} = do
 
   takeMVar clientDone
 
+testUnsafeUSend :: TestTransport -> Assertion
+testUnsafeUSend TestTransport{..} = do
+  serverAddr <- newEmptyMVar
+  clientDone <- newEmptyMVar
+
+  localNode <- newLocalNode testTransport initRemoteTable
+  void $ forkProcess localNode $ do
+    self <- getSelfPid
+    liftIO $ putMVar serverAddr self
+    clientAddr <- expect
+    unsafeUSend clientAddr ()
+
+  void $ forkProcess localNode $ do
+    serverPid <- liftIO $ takeMVar serverAddr
+    getSelfPid >>= unsafeUSend serverPid
+    () <- expect
+    liftIO $ putMVar clientDone ()
+
+  takeMVar clientDone
+
 testUnsafeNSend :: TestTransport -> Assertion
 testUnsafeNSend TestTransport{..} = do
   clientDone <- newEmptyMVar
@@ -1398,6 +1418,25 @@ testUnsafeNSend TestTransport{..} = do
   void $ runProcess localNode $ do
     register "foobar" pid
     unsafeNSend "foobar" ()
+
+  takeMVar clientDone
+
+testUnsafeNSendRemote :: TestTransport -> Assertion
+testUnsafeNSendRemote TestTransport{..} = do
+  clientDone <- newEmptyMVar
+
+  localNode1 <- newLocalNode testTransport initRemoteTable
+  localNode2 <- newLocalNode testTransport initRemoteTable
+
+  _ <- forkProcess localNode1 $ do
+    getSelfPid >>= register "foobar"
+    liftIO $ putMVar clientDone ()
+    () <- expect
+    liftIO $ putMVar clientDone ()
+
+  takeMVar clientDone
+  void $ runProcess localNode2 $ do
+    unsafeNSendRemote (localNodeId localNode1) "foobar" ()
 
   takeMVar clientDone
 
@@ -1541,7 +1580,9 @@ tests testtrans = return [
       , testCase "TextCallLocal"       (testCallLocal           testtrans)
       -- Unsafe Primitives
       , testCase "TestUnsafeSend"      (testUnsafeSend          testtrans)
+      , testCase "TestUnsafeUSend"     (testUnsafeUSend         testtrans)
       , testCase "TestUnsafeNSend"     (testUnsafeNSend         testtrans)
+      , testCase "TestUnsafeNSendRemote" (testUnsafeNSendRemote testtrans)
       , testCase "TestUnsafeSendChan"  (testUnsafeSendChan      testtrans)
       -- usend
       , testCase "USend"               (testUSend usend         testtrans 50)
