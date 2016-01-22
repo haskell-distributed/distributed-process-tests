@@ -19,6 +19,8 @@ import Control.Distributed.Process.Debug
 import Control.Distributed.Process.Management
   ( MxEvent(..)
   )
+import qualified Control.Exception as IO (bracket)
+import Data.List (isPrefixOf, isSuffixOf)
 
 #if ! MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch, log)
@@ -29,6 +31,8 @@ import Test.Framework
   , testGroup
   )
 import Test.Framework.Providers.HUnit (testCase)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+
 
 testSpawnTracing :: TestResult Bool -> Process ()
 testSpawnTracing result = do
@@ -282,6 +286,81 @@ testRemoteTraceRelay TestTransport{..} result =
     -- and just to be polite...
     liftIO $ closeLocalNode node2
 
+-- | Sets the value of an environment variable while executing the given IO
+-- computation and restores the preceeding value upon completion.
+withEnv :: String -> String -> IO a -> IO a
+withEnv var val = IO.bracket (lookupEnv var <* setEnv var val)
+                             (maybe (unsetEnv var) (setEnv var))
+                  . const
+
+-- | Tests that one and only one interesting trace message is produced when a
+-- given action is performed. A message is considered interesting when the given
+-- function return @True@.
+testSystemLoggerMsg :: TestTransport
+                    -> Process a
+                    -> (a -> String -> Bool)
+                    -> IO ()
+testSystemLoggerMsg t action interestingMessage =
+    withEnv "DISTRIBUTED_PROCESS_TRACE_CONSOLE" "yes" $
+    withEnv "DISTRIBUTED_PROCESS_TRACE_FLAGS" "pdnusrl" $ do
+    n <- newLocalNode (testTransport t) initRemoteTable
+
+    runProcess n $ do
+      self <- getSelfPid
+      reregister "trace.logger" self
+      a <- action
+      let interestingMessage' (_ :: String, msg) = interestingMessage a msg
+      -- Wait for the trace message.
+      receiveWait [ matchIf interestingMessage' $ const $ return () ]
+      -- Only one interesting message should arrive.
+      Nothing <- receiveTimeout 100000
+                   [ matchIf interestingMessage' $ const $ return () ]
+      return ()
+
+
+-- | Tests that one and only one trace message is produced when a message is
+-- received.
+testSystemLoggerMxReceive :: TestTransport -> IO ()
+testSystemLoggerMxReceive t = testSystemLoggerMsg t
+    (getSelfPid >>= flip send ())
+    (\_ msg -> "MxReceived" `isPrefixOf` msg
+             -- discard traces of internal messages
+          && not (":: RegisterReply" `isSuffixOf` msg)
+    )
+
+-- | Tests that one and only one trace message is produced when a message is
+-- sent.
+testSystemLoggerMxSent :: TestTransport -> IO ()
+testSystemLoggerMxSent t = testSystemLoggerMsg t
+    (getSelfPid >>= flip send ())
+    (const $ isPrefixOf "MxSent")
+
+-- | Tests that one and only one trace message is produced when a process dies.
+testSystemLoggerMxProcessDied :: TestTransport -> IO ()
+testSystemLoggerMxProcessDied t = testSystemLoggerMsg t
+    (spawnLocal $ return ())
+    (\pid -> isPrefixOf $ "MxProcessDied " ++ show pid)
+
+-- | Tests that one and only one trace message appears when a process spawns.
+testSystemLoggerMxSpawned :: TestTransport -> IO ()
+testSystemLoggerMxSpawned t = testSystemLoggerMsg t
+    (spawnLocal $ return ())
+    (\pid -> isPrefixOf $ "MxSpawned " ++ show pid)
+
+-- | Tests that one and only one trace message appears when a process is
+-- registered.
+testSystemLoggerMxRegistered :: TestTransport -> IO ()
+testSystemLoggerMxRegistered t = testSystemLoggerMsg t
+    (getSelfPid >>= register "a" >> getSelfPid)
+    (\self -> isPrefixOf $ "MxRegistered " ++ show self ++ " " ++ show "a")
+
+-- | Tests that one and only one trace message appears when a process is
+-- unregistered.
+testSystemLoggerMxUnRegistered :: TestTransport -> IO ()
+testSystemLoggerMxUnRegistered t = testSystemLoggerMsg t
+    (getSelfPid >>= register "a" >> unregister "a" >> getSelfPid)
+    (\self -> isPrefixOf $ "MxUnRegistered " ++ show self ++ " " ++ show "a")
+
 tests :: TestTransport -> IO [Test]
 tests testtrans@TestTransport{..} = do
   node1 <- newLocalNode testTransport initRemoteTable
@@ -323,4 +402,12 @@ tests testtrans@TestTransport{..} = do
               (synchronisedAssertion
                "expected blah"
                node1 True (testRemoteTraceRelay testtrans) lock)
+         , testGroup "SystemLoggerTracer"
+           [ testCase "MxReceive" $ testSystemLoggerMxReceive testtrans
+           , testCase "MxSent" $ testSystemLoggerMxSent testtrans
+           , testCase "MxProcessDied" $ testSystemLoggerMxProcessDied testtrans
+           , testCase "MxSpawned" $ testSystemLoggerMxSpawned testtrans
+           , testCase "MxRegistered" $ testSystemLoggerMxRegistered testtrans
+           , testCase "MxUnRegistered" $ testSystemLoggerMxUnRegistered testtrans
+           ]
          ] ]
