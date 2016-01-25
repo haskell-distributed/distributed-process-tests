@@ -104,7 +104,7 @@ Test-Suite TestMx
                      network-transport-tcp >= 0.3 && < 0.5,
                      test-framework >= 0.6 && < 0.9
   Extensions:        CPP
-  ghc-options:       -Wall --threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
+  ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
   HS-Source-Dirs:    tests
 
 Test-Suite TestTracing
