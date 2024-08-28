@@ -177,7 +177,8 @@ newLogger = do
   q <- liftIO $ newTQueueIO
   _ <- forkIO $ logger q
   return $ Logger tid q
-  where logger q' = forever $ do
+  where 
+    logger q' = forever $ do
         msg <- atomically $ readTQueue q'
         putStrLn msg
 

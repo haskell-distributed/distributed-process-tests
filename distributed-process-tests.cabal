@@ -9,7 +9,7 @@ Maintainer:    watson.timothy@gmail.com, edsko@well-typed.com, duncan@well-typed
 copyright:     Well-Typed LLP
 category:      Control, Cloud Haskell
 build-type:    Simple
-cabal-version: >=1.8
+cabal-version: >=1.10
 
 flag tcp
   Description: build and run TCP tests
@@ -41,7 +41,7 @@ library
                      stm
   hs-source-dirs:    src
   ghc-options:       -Wall -fno-warn-unused-do-bind
-  extensions:        CPP,
+  default-extensions:CPP,
                      ExistentialQuantification,
                      FlexibleInstances,
                      DeriveDataTypeable,
@@ -50,6 +50,7 @@ library
                      RankNTypes,
                      RecordWildCards,
                      ScopedTypeVariables
+  default-language:  Haskell2010
   if impl(ghc <= 7.4.2)
     Build-Depends:   ghc-prim == 0.2.0.0
 
@@ -63,9 +64,10 @@ Test-Suite TestCHInMemory
                      network-transport >= 0.4.1.0 && < 0.6,
                      network-transport-inmemory >= 0.5,
                      test-framework >= 0.6 && < 0.9
-  Extensions:        CPP
+  default-extensions:CPP
   ghc-options:       -Wall -threaded -debug -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
   HS-Source-Dirs:    tests
+  default-language:  Haskell2010
 
 Test-Suite TestCHInTCP
   Type:              exitcode-stdio-1.0
@@ -80,9 +82,10 @@ Test-Suite TestCHInTCP
                        test-framework >= 0.6 && < 0.9
   else
     Buildable:       False
-  Extensions:        CPP
+  default-extensions:CPP
   ghc-options:       -Wall -threaded -debug -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
   HS-Source-Dirs:    tests
+  default-language:  Haskell2010
 
 
 Test-Suite TestClosure
@@ -95,9 +98,10 @@ Test-Suite TestClosure
                      network-transport >= 0.4.1.0 && < 0.6,
                      network-transport-inmemory >= 0.5,
                      test-framework >= 0.6 && < 0.9
-  Extensions:        CPP
+  default-extensions:CPP
   ghc-options:       -Wall -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
   HS-Source-Dirs:    tests
+  default-language:  Haskell2010
 
 Test-Suite TestStats
   Type:              exitcode-stdio-1.0
@@ -109,10 +113,10 @@ Test-Suite TestStats
                      network-transport >= 0.4.1.0 && < 0.6,
                      network-transport-inmemory >= 0.5,
                      test-framework >= 0.6 && < 0.9
-  Extensions:        CPP
+  default-extensions:CPP
   ghc-options:       -Wall -debug -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
   HS-Source-Dirs:    tests
-
+  default-language:  Haskell2010
 
 Test-Suite TestMx
   Type:              exitcode-stdio-1.0
@@ -124,9 +128,10 @@ Test-Suite TestMx
                      network-transport >= 0.4.1.0 && < 0.6,
                      network-transport-inmemory >= 0.5,
                      test-framework >= 0.6 && < 0.9
-  Extensions:        CPP
+  default-extensions:CPP
   ghc-options:       -Wall -debug -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
   HS-Source-Dirs:    tests
+  default-language:  Haskell2010
 
 Test-Suite TestTracing
   Type:              exitcode-stdio-1.0
@@ -138,6 +143,7 @@ Test-Suite TestTracing
                      network-transport >= 0.4.1.0 && < 0.6,
                      network-transport-inmemory >= 0.5,
                      test-framework >= 0.6 && < 0.9
-  Extensions:        CPP
+  default-extensions:CPP
   ghc-options:       -Wall -debug -threaded -rtsopts -with-rtsopts=-N -fno-warn-unused-do-bind
   HS-Source-Dirs:    tests
+  default-language:  Haskell2010
