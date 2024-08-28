@@ -79,6 +79,7 @@ import Control.Distributed.Process.Serializable()
 
 import Control.Exception (AsyncException(ThreadKilled), SomeException)
 import Control.Monad (forever)
+import Control.Monad.Catch as Ex (catch, finally)
 import Control.Monad.STM (atomically)
 import Control.Rematch hiding (match)
 import Control.Rematch.Run 
@@ -122,8 +123,8 @@ synchronisedAssertion note localNode expected testProc lock = do
   result <- newEmptyMVar
   _ <- forkProcess localNode $ do
          acquire lock
-         finally (testProc result)
-                 (release lock)
+         Ex.finally (testProc result)
+                    (release lock)
   assertComplete note result expected
   where acquire lock' = liftIO $ takeMVar lock'
         release lock' = liftIO $ putMVar lock' ()
@@ -223,10 +224,10 @@ testProcessReport pid = do
 tryRunProcess :: LocalNode -> Process () -> IO ()
 tryRunProcess node p = do
   tid <- liftIO myThreadId
-  runProcess node $ catch p (\e -> liftIO $ throwTo tid (e::SomeException))
+  runProcess node $ Ex.catch p (\e -> liftIO $ throwTo tid (e::SomeException))
 
 tryForkProcess :: LocalNode -> Process () -> IO ProcessId
 tryForkProcess node p = do
   tid <- liftIO myThreadId
-  forkProcess node $ catch p (\e -> liftIO $ throwTo tid (e::SomeException))
+  forkProcess node $ Ex.catch p (\e -> liftIO $ throwTo tid (e::SomeException))
 

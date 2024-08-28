@@ -23,8 +23,8 @@ import Control.Concurrent.MVar
   , readMVar
   )
 import Control.Monad (replicateM_, replicateM, forever, void, unless, join)
+import Control.Monad.Catch as Ex (catch, finally, mask, onException, try)
 import Control.Exception (SomeException, throwIO, ErrorCall(..))
-import qualified Control.Exception as Ex (catch)
 import Control.Applicative ((<$>), (<*>), pure, (<|>))
 import qualified Network.Transport as NT (closeEndPoint, EndPointAddress)
 import Control.Distributed.Process
@@ -145,19 +145,20 @@ monitorTestProcess :: ProcessId       -- Process to monitor/link to
                    -> MVar ()         -- Signal for successful termination
                    -> Process ()
 monitorTestProcess theirAddr mOrL un reason monitorSetup done =
-  catch (do mRef <- monitorOrLink mOrL theirAddr monitorSetup
-            case (un, mRef) of
-              (True, Nothing) -> do
-                unlink theirAddr
-                liftIO $ putMVar done ()
-              (True, Just ref) -> do
-                unmonitor ref
-                liftIO $ putMVar done ()
-              (False, ref) -> do
-                ProcessMonitorNotification ref' pid reason' <- expect
-                True <- return $ Just ref' == ref && pid == theirAddr && mOrL && reason == reason'
-                liftIO $ putMVar done ()
-        )
+  Ex.catch (do 
+              mRef <- monitorOrLink mOrL theirAddr monitorSetup
+              case (un, mRef) of
+                (True, Nothing) -> do
+                  unlink theirAddr
+                  liftIO $ putMVar done ()
+                (True, Just ref) -> do
+                  unmonitor ref
+                  liftIO $ putMVar done ()
+                (False, ref) -> do
+                  ProcessMonitorNotification ref' pid reason' <- expect
+                  True <- return $ Just ref' == ref && pid == theirAddr && mOrL && reason == reason'
+                  liftIO $ putMVar done ()
+          )
         (\(ProcessLinkException pid reason') -> do
             True <- return $ pid == theirAddr && not mOrL && not un && reason == reason'
             liftIO $ putMVar done ()
@@ -651,10 +652,10 @@ testRegistry TestTransport{..} = do
     nsend "ping" (Pong us)
     Ping pid' <- expect
     True <- return $ pingServer == pid'
-    Left (ProcessRegistrationException "dead" Nothing)  <- try $ register "dead" deadProcess
-    Left (ProcessRegistrationException "ping" (Just x)) <- try $ register "ping" deadProcess
+    Left (ProcessRegistrationException "dead" Nothing)  <- Ex.try $ register "dead" deadProcess
+    Left (ProcessRegistrationException "ping" (Just x)) <- Ex.try $ register "ping" deadProcess
     True <- return $ x == pingServer
-    Left (ProcessRegistrationException "dead" Nothing) <- try $ unregister "dead"
+    Left (ProcessRegistrationException "dead" Nothing) <- Ex.try $ unregister "dead"
     liftIO $ putMVar done ()
 
   takeMVar done
@@ -777,7 +778,7 @@ testSpawnAsyncStrictness TestTransport{..} = do
   runProcess node $ do
     here <-getSelfNode
 
-    ev <- try $ spawnAsync here (error "boom")
+    ev <- Ex.try $ spawnAsync here (error "boom")
     liftIO $ case ev of
       Right _ -> putMVar done (error "Exception didn't fire")
       Left (_::SomeException) -> putMVar done (return ())
@@ -868,7 +869,7 @@ testUSend usendPrim TestTransport{..} numMessages = do
   processA <- newEmptyMVar
   usendTestOk <- newEmptyMVar
 
-  forkProcess node1 $ flip catch (\e -> liftIO $ print (e :: SomeException) ) $ do
+  forkProcess node1 $ flip Ex.catch (\e -> liftIO $ print (e :: SomeException) ) $ do
     us <- getSelfPid
     liftIO $ putMVar processA us
     them <- expect
@@ -1277,7 +1278,7 @@ testMaskRestoreScope TestTransport{..} = do
   parentPid <- newEmptyMVar :: IO (MVar ProcessId)
   spawnedPid <- newEmptyMVar :: IO (MVar ProcessId)
 
-  void $ runProcess localNode $ mask $ \unmask -> do
+  void $ runProcess localNode $ Ex.mask $ \unmask -> do
     getSelfPid >>= liftIO . putMVar parentPid
     void $ spawnLocal $ unmask (getSelfPid >>= liftIO . putMVar spawnedPid)
 
@@ -1306,7 +1307,7 @@ testPrettyExit TestTransport{..} = do
 
   _ <- forkProcess localNode $ do
       (die "timeout")
-      `catch` \ex@(ProcessExitException from _) ->
+      `Ex.catch` \ex@(ProcessExitException from _) ->
         let expected = "exit-from=" ++ (show from)
         in do
           True <- return $ (show ex) == expected
@@ -1480,11 +1481,11 @@ testCallLocal TestTransport{..} = do
     spawnLocal $ do
         caller <- getSelfPid
         send keeper caller
-        onException
+        Ex.onException
           (callLocal $ do
-                onException (do send keeper caller
-                                expect)
-                            (do liftIO $ writeIORef ibox True))
+                Ex.onException (do send keeper caller
+                                   expect)
+                               (do liftIO $ writeIORef ibox True))
           (send keeper ())
     caller <- expect
     exit caller "test"
@@ -1496,7 +1497,7 @@ testCallLocal TestTransport{..} = do
   -- Testing that when the worker raises an exception, the exception is propagated to the parent.
   ibox2 <- newIORef False
   runProcess node $ do
-    r <- try (callLocal $ error "e" >> return ())
+    r <- Ex.try (callLocal $ error "e" >> return ())
     liftIO $ writeIORef ibox2 $ case r of
       Left (ErrorCall "e") -> True
       _ -> False
@@ -1514,7 +1515,7 @@ testCallLocal TestTransport{..} = do
                 send keeper us
                 () <- expect
                 liftIO yield)
-            `finally` (liftIO $ writeIORef ibox3 True)
+            `Ex.finally` (liftIO $ writeIORef ibox3 True)
         liftIO $ putMVar result3 =<< readIORef ibox3
     worker <- expect
     send worker ()
@@ -1531,8 +1532,8 @@ testCallLocal TestTransport{..} = do
         callLocal
             ((do send keeper caller
                  expect)
-               `finally` (liftIO $ writeIORef ibox4 True))
-            `finally` (liftIO $ putMVar result4 =<< readIORef ibox4)
+               `Ex.finally` (liftIO $ writeIORef ibox4 True))
+            `Ex.finally` (liftIO $ putMVar result4 =<< readIORef ibox4)
     caller <- expect
     exit caller "hi!"
   True <- takeMVar result4
