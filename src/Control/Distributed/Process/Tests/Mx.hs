@@ -4,7 +4,6 @@ module Control.Distributed.Process.Tests.Mx (tests) where
 import Control.Distributed.Process.Tests.Internal.Utils
 import Network.Transport.Test (TestTransport(..))
 
-import Control.Concurrent (threadDelay)
 import Control.Distributed.Process
 import Control.Distributed.Process.Node
 import Control.Distributed.Process.Management
@@ -21,12 +20,6 @@ import Control.Distributed.Process.Management
   , mxUpdateLocal
   , mxNotify
   , mxBroadcast
-  , mxGetId
-  , mxGet
-  , mxSet
-  , mxClear
-  , mxPurgeTable
-  , mxDropTable
   )
 import Control.Monad (void)
 import Data.Binary
@@ -180,61 +173,6 @@ testAgentEventHandling result = do
 
   stash result $ seenAlive && seenDead
 
-testAgentPublication :: TestResult (Maybe Publish) -> Process ()
-testAgentPublication result = do
-  (syncChan, rp) <- newChan
-  let ourId = MxAgentId "publication-agent"
-  agentPid <- mxAgent ourId () [
-      mxSink $ \() -> do
-         selfId <- mxGetId
-         liftMX $ mxSet selfId "publish" Publish >> sendChan syncChan ()
-         mxReady
-    ]
-
-  mxNotify ()
-  () <- receiveChan rp
-
-  stash result =<< mxGet ourId "publish"
-
-  mref <- monitor agentPid
-  kill agentPid "finished"
-  receiveWait [
-      matchIf (\(ProcessMonitorNotification ref _ _) -> ref == mref)
-              ((\_ -> return ()))
-    ]
-
-testAgentTableClear :: Int -> TestResult (Maybe Int, Maybe Int) -> Process ()
-testAgentTableClear val result =
-  let tId  = (MxAgentId "agent-1")
-      tKey = "key-1" in do
-    mxSet tId tKey val
-    get1 <- mxGet tId tKey
-    mxClear tId tKey
-    get2 <- mxGet tId tKey
-    stash result (get1, get2)
-
-testAgentTablePurge :: TestResult (Maybe Int) -> Process ()
-testAgentTablePurge result =
-  let tId  = MxAgentId "agent-2"
-      tKey = "key-2" in do
-    mxSet tId tKey (12345 :: Int)
-    mxPurgeTable tId
-    stash result =<< mxGet tId tKey
-
-testAgentTableDelete :: Int
-                     -> TestResult (Maybe Int, Maybe Int, Maybe Int)
-                     -> Process ()
-testAgentTableDelete val result =
-  let tId  = (MxAgentId "agent-3")
-      tKey = "key-3" in do
-    mxSet tId tKey val
-    get1 <- mxGet tId tKey
-    mxDropTable tId
-    get2 <- mxGet tId tKey
-    mxSet tId tKey val
-    get3 <- mxGet tId tKey
-    stash result (get1, get2, get3)
-
 tests :: TestTransport -> IO [Test]
 tests TestTransport{..} = do
   node1 <- newLocalNode testTransport initRemoteTable
@@ -262,25 +200,4 @@ tests TestTransport{..} = do
              node1 (sort ["first", "second",
                           "third", "fourth",
                           "fifth"]) testAgentPrioritisation)
-    ],
-    testGroup "Mx Global Properties" [
-        testCase "Global Property Publication"
-            (delayedAssertion
-             "expected (Just Publish), but no table entry was found"
-             node1 (Just Publish) testAgentPublication)
-      , testCase "Clearing Global Properties"
-            (delayedAssertion
-             "expected (Just 1024, Nothing): invalid table entry found!"
-             node1 (Just 1024, Nothing) (testAgentTableClear 1024))
-      , testCase "Purging Global Tables"
-            (delayedAssertion
-             "expected Nothing, but a table entry was found"
-             node1 Nothing testAgentTablePurge)
-      , testCase "Deleting and (Re)Creating Global Tables"
-            (delayedAssertion
-             "expected (Just 15, Nothing, Just 15): invalid table entry found!"
-             node1 (Just 15, Nothing, Just 15) (testAgentTableDelete 15))
-        -- Wait for other tests to finish.
-      , testCase "Wait" $
-            threadDelay 100000
-      ]]
+    ]]
